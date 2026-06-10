@@ -1,0 +1,112 @@
+# CLAUDE.md
+Responde siempre en español
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Commands
+
+All backend commands must be run from `mbs_backend/`:
+
+```bash
+# Install dependencies
+npm install
+
+# Start production server
+npm start          # node src/app.js
+
+# Start dev server (auto-restart on change)
+npm run dev        # nodemon src/app.js
+```
+
+### Tests
+
+```bash
+npm test           # jest --runInBand
+```
+
+Tests live in `mbs_backend/tests/` (Jest + Supertest) and run against the real Express app (`require('../src/app')`, which only calls `app.listen` when run directly — see `if (require.main === module)` in `app.js`) and the configured PostgreSQL database from `.env`. There is no separate test database; tests create their own throwaway users (`test_<timestamp>@mbs.mx`) and rely on existing seed data (e.g. `admin@mbs.mx` / `Admin@MBS2025`, the `cable-fo-monomodo-sc-upc-3mm` product) from `03_seed_data.sql`. Run `--runInBand` to avoid concurrent connections racing on shared rows.
+
+### Database setup (PostgreSQL 14+, extension `unaccent` required)
+
+Run scripts in this exact order — they have dependencies:
+
+```bash
+psql -U postgres -d mbs_comunicaciones -f 01_schema.sql
+psql -U postgres -d mbs_comunicaciones -f 02_functions.sql
+psql -U postgres -d mbs_comunicaciones -f 03_seed_data.sql
+# 04_examples.sql is reference only — do not run in production
+# 05_pagos.sql adds payment tables — run after 03 if payments are needed
+```
+
+To reset functions without dropping schema:
+
+```bash
+psql -U postgres -d mbs_comunicaciones -f 00_drop_functions.sql
+psql -U postgres -d mbs_comunicaciones -f 02_functions.sql
+```
+
+### Environment
+
+Copy `mbs_backend/.env.example` to `mbs_backend/.env` and fill in values. Required keys: `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `JWT_SECRET`, `JWT_EXPIRES_IN`. PayPal keys can remain empty until needed.
+
+---
+
+## Architecture
+
+### Overview
+
+This is a full-stack e-commerce for fiber optic products. Express serves both the REST API (`/api/*`) and the static HTML frontend from `mbs_backend/public/`. Business logic is split between thin Node.js controllers and PostgreSQL stored functions.
+
+### Backend (`mbs_backend/src/`)
+
+```
+app.js               — Entry point: middleware, static files, route mounting, error handler
+config/db.js         — pg Pool; exports query(text, params) helper used everywhere
+middlewares/auth.js  — verificarToken, soloAdmin, tokenOpcional
+controllers/         — One file per domain; each function maps to one route
+routes/              — Router files; wire HTTP verbs to controller functions
+services/            — factura.service.js: generates printable HTML invoice
+```
+
+**Controller pattern:** All controllers call `query()` directly — there is no service layer between controllers and the database. Most complex operations delegate to a stored function via `SELECT * FROM fn_nombre(...)`. Inline SQL (not stored functions) is used only for simple direct queries.
+
+**Auth flow:** JWT stored in `localStorage` (client) and sent as `Authorization: Bearer <token>`. The token payload is `{ id, email, rol }`. Anonymous cart sessions use `x-session-key` from `sessionStorage`.
+
+**API response shape:** All endpoints return `{ ok: boolean, mensaje?: string, ...data }`.
+
+### Route → Controller → DB mapping
+
+| Prefix | Routes file | Controller | Notes |
+|---|---|---|---|
+| `/api/auth` | auth.routes.js | auth.controller.js | registro, login, perfil |
+| `/api/productos` | productos.routes.js | productos.controller.js | catalog, categories, brands |
+| `/api/carrito` | carrito.routes.js | carrito.controller.js | anonymous + authenticated carts |
+| `/api/pedidos` | pedidos.routes.js | pedidos.controller.js | some routes inline in router file |
+| `/api/usuarios` | usuarios.routes.js | — | all logic inline in router file |
+| `/api/admin` | admin.routes.js | admin.controller.js | requires `verificarToken + soloAdmin` |
+| `/api/pagos` | pagos.routes.js | pagos.controller.js | SPEI and PayPal (Orders v2) active |
+
+### Database (`01_schema.sql`, `02_functions.sql`)
+
+The schema owns most business logic through stored functions prefixed `fn_`. Controllers call them with explicit `CAST($N AS TYPE)` to avoid type coercion issues.
+
+Key stored functions:
+- `fn_crear_pedido(...)` — transactional checkout: stock validation, price snapshot, inventory movement, coupon consumption, cart cleanup, notification
+- `fn_guardar_producto(id=0, ...)` — creates when `id=0`, updates otherwise; auto-registers inventory movement
+- `fn_listar_productos(...)` — full-text search via `tsvector` field (`fts`) with `unaccent` support
+- `fn_carrito_agregar_item(usuario_id, session_key, ...)` — supports both auth and anonymous sessions
+
+Full function reference is in `MBS_DB_README.md`.
+
+### Frontend (`mbs_backend/public/`)
+
+Static HTML pages, no build step. `public/js/global.js` is loaded on every page and provides: `apiFetch()` wrapper, JWT/session helpers, cart badge updater, navbar auth state, and toast notifications. Each page has its own JS file in `public/js/`.
+
+MXN/USD dual-currency display fetches a public exchange rate API on page load.
+
+### Known issues to be aware of
+
+- **Duplicate backend:** `mbs_backend/mbs_backend/` is an orphaned copy — the live code is in `mbs_backend/src/`.
+- **Malformed directories:** `mbs_backend/{src` and `mbs_backend/src/{config,controllers,...}` are filesystem artifacts from a failed shell expansion — ignore them.
+- **Encoding:** Some source files contain garbled UTF-8 characters (`Ã³`, `â€"`, etc.) in string literals. Fix the file encoding before editing those strings.
+- **PayPal:** implemented via `services/paypal.service.js` (Orders v2 — create/capture/webhook). Credentials come from `.env` (`PAYPAL_CLIENT_ID`, `PAYPAL_SECRET`, `PAYPAL_MODE`, `PAYPAL_WEBHOOK_ID`); if empty, `crearOrdenPaypal` returns `503`.

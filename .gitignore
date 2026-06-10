@@ -1,0 +1,6 @@
+# mbs_backend tiene su propio repositorio git independiente
+mbs_backend/
+
+# Archivos de sistema
+Thumbs.db
+.DS_Store
