@@ -3,7 +3,7 @@
 ## Archivos del proyecto
 
 ```
-mbs_db/
+database/
 ├── 00_drop_functions.sql → Elimina funciones previas (opcional, antes de 02)
 ├── 01_schema.sql         → Tablas, índices, triggers (611 líneas)
 ├── 02_functions.sql      → Funciones / stored procedures (1,060 líneas)
@@ -11,7 +11,8 @@ mbs_db/
 ├── 04_examples.sql       → Guía de uso con SELECTs listos (203 líneas)
 ├── 05_pagos.sql          → Módulo de pagos: PayPal y SPEI/referencia bancaria
 ├── 06_imagenes.sql       → Índices de producto_imagenes (referencia)
-├── 07_contacto.sql       → Tablas mensajes_contacto y password_resets
+└── 07_contacto.sql       → Tablas mensajes_contacto y password_resets
+docs/
 └── MBS_DB_README.md      → Esta documentación
 ```
 

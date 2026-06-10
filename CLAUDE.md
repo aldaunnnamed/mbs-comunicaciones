@@ -31,18 +31,18 @@ Tests live in `mbs_backend/tests/` (Jest + Supertest) and run against the real E
 Run scripts in this exact order — they have dependencies:
 
 ```bash
-psql -U postgres -d mbs_comunicaciones -f 01_schema.sql
-psql -U postgres -d mbs_comunicaciones -f 02_functions.sql
-psql -U postgres -d mbs_comunicaciones -f 03_seed_data.sql
-# 04_examples.sql is reference only — do not run in production
-# 05_pagos.sql adds payment tables — run after 03 if payments are needed
+psql -U postgres -d mbs_comunicaciones -f database/01_schema.sql
+psql -U postgres -d mbs_comunicaciones -f database/02_functions.sql
+psql -U postgres -d mbs_comunicaciones -f database/03_seed_data.sql
+# database/04_examples.sql is reference only — do not run in production
+# database/05_pagos.sql adds payment tables — run after 03 if payments are needed
 ```
 
 To reset functions without dropping schema:
 
 ```bash
-psql -U postgres -d mbs_comunicaciones -f 00_drop_functions.sql
-psql -U postgres -d mbs_comunicaciones -f 02_functions.sql
+psql -U postgres -d mbs_comunicaciones -f database/00_drop_functions.sql
+psql -U postgres -d mbs_comunicaciones -f database/02_functions.sql
 ```
 
 ### Environment
@@ -86,7 +86,7 @@ services/            — factura.service.js: generates printable HTML invoice
 | `/api/admin` | admin.routes.js | admin.controller.js | requires `verificarToken + soloAdmin` |
 | `/api/pagos` | pagos.routes.js | pagos.controller.js | SPEI and PayPal (Orders v2) active |
 
-### Database (`01_schema.sql`, `02_functions.sql`)
+### Database (`database/01_schema.sql`, `database/02_functions.sql`)
 
 The schema owns most business logic through stored functions prefixed `fn_`. Controllers call them with explicit `CAST($N AS TYPE)` to avoid type coercion issues.
 
@@ -96,7 +96,7 @@ Key stored functions:
 - `fn_listar_productos(...)` — full-text search via `tsvector` field (`fts`) with `unaccent` support
 - `fn_carrito_agregar_item(usuario_id, session_key, ...)` — supports both auth and anonymous sessions
 
-Full function reference is in `MBS_DB_README.md`.
+Full function reference is in `docs/MBS_DB_README.md`.
 
 ### Frontend (`mbs_backend/public/`)
 
