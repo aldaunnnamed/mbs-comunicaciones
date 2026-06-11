@@ -104,8 +104,9 @@ SISTEMA
 | Función | Descripción | Ejemplo |
 |---|---|---|
 | `fn_listar_productos(cat_id, marca_id, precio_min, precio_max, solo_stock, busqueda, orden, pagina, por_pagina)` | Listado con todos los filtros del catálogo, full-text con acentos | `SELECT * FROM fn_listar_productos(1,NULL,0,5000,TRUE,'SC','precio_asc',1,9);` |
-| `fn_producto_detalle(slug)` | Datos completos del producto por slug | `SELECT * FROM fn_producto_detalle('cable-fo-monomodo-sc-upc-3mm');` |
+| `fn_producto_detalle(slug)` | Datos completos del producto por slug, incluye `r_categoria_id` y `r_categoria_nombre` (usados para cargar productos relacionados) | `SELECT * FROM fn_producto_detalle('cable-fo-monomodo-sc-upc-3mm');` |
 | `fn_guardar_producto(id, sku, nombre, desc_corta, desc_larga, cat_id, marca_id, precio, precio_antes, stock, stock_min, estado, badge, admin_id)` | Crear (id=0) o editar producto. Registra movimiento de inventario automáticamente | `SELECT * FROM fn_guardar_producto(0,'FO-SM-LC-001','Cable LC',...);` |
+| `fn_listar_resenas_producto(p_producto_id, p_pagina=1)` | Reseñas aprobadas de un producto, paginadas (10 por página) | `SELECT * FROM fn_listar_resenas_producto(1,1);` |
 
 ### Módulo: Carrito
 
@@ -215,9 +216,9 @@ JWT_EXPIRES_IN=7d
 PAYPAL_MODE=sandbox
 PAYPAL_CLIENT_ID=
 PAYPAL_SECRET=
-SPEI_CLABE=
-SPEI_BANCO=STP
 ```
+
+> Los datos bancarios para SPEI (`spei_clabe`, `spei_banco`, `spei_beneficiario`) **no** se configuran por variables de entorno: se guardan en la tabla `configuracion` y se editan desde el panel de administración ("Configuración"). Ver `fn_obtener_configuracion` / `fn_guardar_configuracion`.
 
 ---
 

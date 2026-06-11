@@ -34,9 +34,15 @@ Run scripts in this exact order — they have dependencies:
 psql -U postgres -d mbs_comunicaciones -f database/01_schema.sql
 psql -U postgres -d mbs_comunicaciones -f database/02_functions.sql
 psql -U postgres -d mbs_comunicaciones -f database/03_seed_data.sql
+psql -U postgres -d mbs_comunicaciones -f database/05_pagos.sql
+psql -U postgres -d mbs_comunicaciones -f database/06_imagenes.sql
+psql -U postgres -d mbs_comunicaciones -f database/07_contacto.sql
 # database/04_examples.sql is reference only — do not run in production
-# database/05_pagos.sql adds payment tables — run after 03 if payments are needed
 ```
+
+- `05_pagos.sql` adds the PayPal/SPEI payment tables — required for `/api/pagos`.
+- `06_imagenes.sql` is optional: only adds indexes on `producto_imagenes` (the table already exists in `01_schema.sql`).
+- `07_contacto.sql` creates `mensajes_contacto` and `password_resets` — **required** for password recovery, the contact form, and the admin "Mensajes" panel.
 
 To reset functions without dropping schema:
 
@@ -63,6 +69,7 @@ This is a full-stack e-commerce for fiber optic products. Express serves both th
 app.js               — Entry point: middleware, static files, route mounting, error handler
 config/db.js         — pg Pool; exports query(text, params) helper used everywhere
 middlewares/auth.js  — verificarToken, soloAdmin, tokenOpcional
+middlewares/upload.js — multer: uploadImage (product photos → public/uploads/productos), uploadCsv (memory)
 controllers/         — One file per domain; each function maps to one route
 routes/              — Router files; wire HTTP verbs to controller functions
 services/            — factura.service.js: generates printable HTML invoice
@@ -85,6 +92,7 @@ services/            — factura.service.js: generates printable HTML invoice
 | `/api/usuarios` | usuarios.routes.js | — | all logic inline in router file |
 | `/api/admin` | admin.routes.js | admin.controller.js | requires `verificarToken + soloAdmin` |
 | `/api/pagos` | pagos.routes.js | pagos.controller.js | SPEI and PayPal (Orders v2) active |
+| `/api/contacto` | contacto.routes.js | — | all logic inline, like usuarios.routes.js — inserts into `mensajes_contacto` |
 
 ### Database (`database/01_schema.sql`, `database/02_functions.sql`)
 
