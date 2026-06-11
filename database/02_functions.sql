@@ -296,6 +296,7 @@ RETURNS TABLE(
   r_stock_actual INT,
   r_badge VARCHAR,
   r_destacado BOOLEAN,
+  r_categoria_id INT,
   r_categoria_nombre VARCHAR,
   r_marca_nombre VARCHAR,
   r_calificacion_promedio NUMERIC,
@@ -305,7 +306,7 @@ RETURNS TABLE(
          p.descripcion_corta, p.descripcion_larga,
          p.precio_venta, p.precio_antes,
          p.stock_actual, p.badge, p.destacado,
-         c.nombre, m.nombre,
+         c.id, c.nombre, m.nombre,
          ROUND(COALESCE(AVG(r.calificacion),0)::NUMERIC,1),
          COUNT(DISTINCT r.id)
     FROM productos p
@@ -313,7 +314,7 @@ RETURNS TABLE(
     LEFT JOIN marcas m ON m.id = p.marca_id
     LEFT JOIN resenas r ON r.producto_id = p.id AND r.aprobado = TRUE
    WHERE p.slug = p_slug AND p.estado = 'activo'
-   GROUP BY p.id, c.nombre, m.nombre;
+   GROUP BY p.id, c.id, c.nombre, m.nombre;
 $$;
 
 -- Listar reseñas aprobadas de un producto, paginadas
