@@ -797,16 +797,24 @@ END;
 $$;
 
 -- Detalle completo de un pedido
-CREATE OR REPLACE FUNCTION fn_detalle_pedido(p_pedido_id INT, p_usuario_id INT DEFAULT NULL)
+DROP FUNCTION IF EXISTS fn_detalle_pedido(INT, INT);
+CREATE FUNCTION fn_detalle_pedido(p_pedido_id INT, p_usuario_id INT DEFAULT NULL)
 RETURNS TABLE(
   r_pedido_numero VARCHAR,
   r_estado VARCHAR,
+  r_subtotal NUMERIC,
+  r_costo_envio NUMERIC,
+  r_iva NUMERIC,
   r_total NUMERIC,
   r_metodo_envio_nombre VARCHAR,
   r_metodo_pago_nombre VARCHAR,
   r_dir_nombre VARCHAR,
+  r_dir_apellidos VARCHAR,
   r_dir_calle VARCHAR,
+  r_dir_colonia VARCHAR,
   r_dir_ciudad VARCHAR,
+  r_dir_estado_geo VARCHAR,
+  r_item_producto_id INT,
   r_item_nombre VARCHAR,
   r_item_sku VARCHAR,
   r_item_cantidad INT,
@@ -815,10 +823,10 @@ RETURNS TABLE(
   r_hist_nota TEXT,
   r_hist_fecha TIMESTAMPTZ
 ) LANGUAGE sql AS $$
-  SELECT p.numero, p.estado, p.total,
+  SELECT p.numero, p.estado, p.subtotal, p.costo_envio, p.iva, p.total,
          me.nombre, mp.nombre,
-         p.dir_nombre, p.dir_calle, p.dir_ciudad,
-         pi.nombre, pi.sku, pi.cantidad, pi.subtotal,
+         p.dir_nombre, p.dir_apellidos, p.dir_calle, p.dir_colonia, p.dir_ciudad, p.dir_estado_geo,
+         pi.producto_id, pi.nombre, pi.sku, pi.cantidad, pi.subtotal,
          ph.estado, ph.nota, ph.created_at
     FROM pedidos p
     JOIN metodos_envio me ON me.id = p.metodo_envio_id
