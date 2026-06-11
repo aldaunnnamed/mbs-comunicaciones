@@ -316,6 +316,47 @@ RETURNS TABLE(
    GROUP BY p.id, c.nombre, m.nombre;
 $$;
 
+-- Listar reseñas aprobadas de un producto, paginadas
+CREATE OR REPLACE FUNCTION fn_listar_resenas_producto(
+  p_producto_id INT,
+  p_pagina      INT DEFAULT 1
+)
+RETURNS TABLE(
+  r_id              INT,
+  r_usuario_nombre  VARCHAR,
+  r_calificacion    SMALLINT,
+  r_titulo          VARCHAR,
+  r_comentario      TEXT,
+  r_verificado      BOOLEAN,
+  r_created_at      TIMESTAMPTZ,
+  r_total_registros BIGINT
+) LANGUAGE plpgsql AS $$
+DECLARE
+  v_limite INT := 10;
+  v_offset INT := (p_pagina - 1) * v_limite;
+  v_total  BIGINT;
+BEGIN
+  SELECT COUNT(*) INTO v_total
+    FROM resenas
+   WHERE producto_id = p_producto_id AND aprobado = TRUE;
+
+  RETURN QUERY
+  SELECT res.id,
+         (u.nombre || ' ' || LEFT(u.apellidos, 1) || '.')::VARCHAR,
+         res.calificacion,
+         res.titulo,
+         res.comentario,
+         res.verificado,
+         res.created_at,
+         v_total
+    FROM resenas res
+    JOIN usuarios u ON u.id = res.usuario_id
+   WHERE res.producto_id = p_producto_id AND res.aprobado = TRUE
+   ORDER BY res.created_at DESC
+   LIMIT v_limite OFFSET v_offset;
+END;
+$$;
+
 -- Listado de productos para administración (incluye inactivos/borradores)
 CREATE OR REPLACE FUNCTION fn_admin_listar_productos(
   p_busqueda      VARCHAR DEFAULT NULL,
