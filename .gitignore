@@ -4,3 +4,9 @@ mbs_backend/
 # Archivos de sistema
 Thumbs.db
 .DS_Store
+
+# Configuración del editor
+.vscode/
+
+# Documentos generados
+Manual_Usuario_Admin_MBS_v1.0.pdf
