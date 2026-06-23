@@ -840,7 +840,7 @@ $$;
 
 -- Detalle completo de un pedido
 DROP FUNCTION IF EXISTS fn_detalle_pedido(INT, INT);
-CREATE FUNCTION fn_detalle_pedido(p_pedido_id INT, p_usuario_id INT DEFAULT NULL)
+CREATE OR REPLACE FUNCTION fn_detalle_pedido(p_pedido_id INT, p_usuario_id INT DEFAULT NULL)
 RETURNS TABLE(
   r_pedido_numero VARCHAR,
   r_estado VARCHAR,
