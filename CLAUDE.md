@@ -37,12 +37,16 @@ psql -U postgres -d mbs_comunicaciones -f database/03_seed_data.sql
 psql -U postgres -d mbs_comunicaciones -f database/05_pagos.sql
 psql -U postgres -d mbs_comunicaciones -f database/06_imagenes.sql
 psql -U postgres -d mbs_comunicaciones -f database/07_contacto.sql
+psql -U postgres -d mbs_comunicaciones -f database/08_pagos_metodos.sql
+psql -U postgres -d mbs_comunicaciones -f database/09_fix_carrito.sql
 # database/04_examples.sql is reference only — do not run in production
 ```
 
 - `05_pagos.sql` adds the PayPal/SPEI payment tables — required for `/api/pagos`.
 - `06_imagenes.sql` is optional: only adds indexes on `producto_imagenes` (the table already exists in `01_schema.sql`).
 - `07_contacto.sql` creates `mensajes_contacto` and `password_resets` — **required** for password recovery, the contact form, and the admin "Mensajes" panel.
+- `08_pagos_metodos.sql` creates and seeds the `metodos_pago` table (tarjeta, PayPal, SPEI, contado, MSI, cripto) — **required** for the checkout to show payment methods.
+- `09_fix_carrito.sql` rewrites `fn_carrito_obtener` to merge the anonymous cart when a user logs in — **required** for correct cart behavior after login.
 
 To reset functions without dropping schema:
 
@@ -91,7 +95,7 @@ services/            — factura.service.js: generates printable HTML invoice
 | `/api/pedidos` | pedidos.routes.js | pedidos.controller.js | some routes inline in router file |
 | `/api/usuarios` | usuarios.routes.js | — | all logic inline in router file |
 | `/api/admin` | admin.routes.js | admin.controller.js | requires `verificarToken + soloAdmin` |
-| `/api/pagos` | pagos.routes.js | pagos.controller.js | SPEI and PayPal (Orders v2) active |
+| `/api/pagos` | pagos.routes.js | pagos.controller.js | SPEI, PayPal (Orders v2), Stripe (PaymentIntents) |
 | `/api/contacto` | contacto.routes.js | — | all logic inline, like usuarios.routes.js — inserts into `mensajes_contacto` |
 
 ### Database (`database/01_schema.sql`, `database/02_functions.sql`)
@@ -117,4 +121,5 @@ MXN/USD dual-currency display fetches a public exchange rate API on page load.
 - **Duplicate backend:** `mbs_backend/mbs_backend/` is an orphaned copy — the live code is in `mbs_backend/src/`.
 - **Malformed directories:** `mbs_backend/{src` and `mbs_backend/src/{config,controllers,...}` are filesystem artifacts from a failed shell expansion — ignore them.
 - **Encoding:** Some source files contain garbled UTF-8 characters (`Ã³`, `â€"`, etc.) in string literals. Fix the file encoding before editing those strings.
-- **PayPal:** implemented via `services/paypal.service.js` (Orders v2 — create/capture/webhook). Credentials come from `.env` (`PAYPAL_CLIENT_ID`, `PAYPAL_SECRET`, `PAYPAL_MODE`, `PAYPAL_WEBHOOK_ID`); if empty, `crearOrdenPaypal` returns `503`.
+- **Payment credentials:** All payment credentials (PayPal, Stripe) are stored in the `configuracion` DB table and managed from the admin panel (Configuración > Pagos). They are NOT read from `.env`. Only SMTP and DB credentials go in `.env`.
+- **ngrok:** use `mbs_backend/iniciar_con_ngrok.bat` to start both ngrok (static domain `underrate-silk-librarian.ngrok-free.dev`) and the Node server together. `APP_URL` in `.env` must match the public domain for payment return URLs.

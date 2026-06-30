@@ -970,8 +970,8 @@ RETURNS TABLE(
          COUNT(*),
          COALESCE(SUM(total), 0)
     FROM pedidos
-   WHERE created_at >= CURRENT_DATE - INTERVAL '6 days'
-     AND estatus_pago = 'pagado'
+   WHERE created_at::DATE >= DATE_TRUNC('week', CURRENT_DATE)::DATE
+     AND estatus_pago IN ('pagado', 'en_proceso', 'nuevo')
    GROUP BY created_at::DATE
    ORDER BY created_at::DATE;
 $$;
