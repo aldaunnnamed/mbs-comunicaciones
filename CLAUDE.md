@@ -48,6 +48,11 @@ psql -U postgres -d mbs_comunicaciones -f database/09_fix_carrito.sql
 - `08_pagos_metodos.sql` creates and seeds the `metodos_pago` table (tarjeta, PayPal, SPEI, contado, MSI, cripto) — **required** for the checkout to show payment methods.
 - `09_fix_carrito.sql` rewrites `fn_carrito_obtener` to merge the anonymous cart when a user logs in — **required** for correct cart behavior after login.
 
+Other SQL files (not part of the setup sequence):
+- `database/migrations/` — one-off migration scripts (run manually when needed)
+- `database/tools/CHECK_firmas.sql` — diagnostic: verifies stored function signatures
+- `database/12_remove_mercadopago.sql` — removes MercadoPago references (already applied)
+
 To reset functions without dropping schema:
 
 ```bash
@@ -58,6 +63,36 @@ psql -U postgres -d mbs_comunicaciones -f database/02_functions.sql
 ### Environment
 
 Copy `mbs_backend/.env.example` to `mbs_backend/.env` and fill in values. Required keys: `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `JWT_SECRET`, `JWT_EXPIRES_IN`. PayPal keys can remain empty until needed.
+
+---
+
+## Project structure
+
+```
+MBS_COMUNICACIONES/
+├── CLAUDE.md / README.md / .gitignore
+├── iniciar_con_ngrok.bat        — starts ngrok + Node server together
+├── iniciar_servidor.bat         — starts Node server only
+├── database/
+│   ├── 00_drop_functions.sql … 09_fix_carrito.sql, 12_remove_mercadopago.sql
+│   ├── migrations/              — one-off scripts (run manually)
+│   └── tools/                   — diagnostic queries (CHECK_firmas.sql)
+├── docs/
+│   ├── MBS_DB_README.md         — full stored-function reference
+│   ├── MBS_Documentacion_BD_v2.docx
+│   ├── AUDITORIA_PROYECTO.md
+│   ├── Manual_Usuario_Admin_MBS_v1.0.pdf
+│   ├── Manual_Usuario_MBS_v2.0.pdf
+│   └── interfaces/
+│       ├── admin/               — wireframe PDFs for admin panel
+│       └── cliente/             — wireframe PDFs for storefront
+└── mbs_backend/                 — Node.js app (has its own git repo)
+    ├── src/                     — live application code
+    ├── public/                  — static frontend
+    ├── tests/                   — Jest + Supertest
+    ├── scripts/                 — utility scripts (fix-imagenes-principal.js)
+    └── logs/                    — runtime logs (gitignored)
+```
 
 ---
 
@@ -118,8 +153,7 @@ MXN/USD dual-currency display fetches a public exchange rate API on page load.
 
 ### Known issues to be aware of
 
-- **Duplicate backend:** `mbs_backend/mbs_backend/` is an orphaned copy — the live code is in `mbs_backend/src/`.
 - **Malformed directories:** `mbs_backend/{src` and `mbs_backend/src/{config,controllers,...}` are filesystem artifacts from a failed shell expansion — ignore them.
 - **Encoding:** Some source files contain garbled UTF-8 characters (`Ã³`, `â€"`, etc.) in string literals. Fix the file encoding before editing those strings.
 - **Payment credentials:** All payment credentials (PayPal, Stripe) are stored in the `configuracion` DB table and managed from the admin panel (Configuración > Pagos). They are NOT read from `.env`. Only SMTP and DB credentials go in `.env`.
-- **ngrok:** use `mbs_backend/iniciar_con_ngrok.bat` to start both ngrok (static domain `underrate-silk-librarian.ngrok-free.dev`) and the Node server together. `APP_URL` in `.env` must match the public domain for payment return URLs.
+- **ngrok:** use `iniciar_con_ngrok.bat` (repo root) to start both ngrok (static domain `underrate-silk-librarian.ngrok-free.dev`) and the Node server together. `APP_URL` in `.env` must match the public domain for payment return URLs.
