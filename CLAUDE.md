@@ -26,6 +26,13 @@ npm test           # jest --runInBand
 
 Tests live in `mbs_backend/tests/` (Jest + Supertest) and run against the real Express app (`require('../src/app')`, which only calls `app.listen` when run directly — see `if (require.main === module)` in `app.js`) and the configured PostgreSQL database from `.env`. There is no separate test database; tests create their own throwaway users (`test_<timestamp>@mbs.mx`) and rely on existing seed data (e.g. `admin@mbs.mx` / `Admin@MBS2025`, the `cable-fo-monomodo-sc-upc-3mm` product) from `03_seed_data.sql`. Run `--runInBand` to avoid concurrent connections racing on shared rows.
 
+**Current state: 93/93 tests passing** (9 suites: auth, admin, productos, carrito, pedidos, usuarios, resenas, contacto, pagos.paypal).
+
+Test isolation notes:
+- Product tests (`admin.test.js`) use `TEST-ADMIN-${Date.now()}` for both SKU and name to avoid slug collisions across runs — the DB is not cleaned between runs.
+- `fn_confirmar_pago_paypal` idempotency check requires `05_pagos.sql` to be applied (the function in the DB must be up to date). Re-run `05_pagos.sql` if this test fails after a DB reset.
+- Jest reports an open-handles warning after the suite — benign, caused by the pg pool not being closed between test files.
+
 ### Database setup (PostgreSQL 14+, extension `unaccent` required)
 
 Run scripts in this exact order — they have dependencies:
