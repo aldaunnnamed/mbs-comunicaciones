@@ -7,6 +7,13 @@ echo.
 echo URL publica: https://underrate-silk-librarian.ngrok-free.dev
 echo.
 
+:: Liberar puerto 3000 si ya esta ocupado
+echo Verificando puerto 3000...
+for /f "tokens=5" %%p in ('netstat -ano ^| findstr ":3000 " ^| findstr "LISTENING"') do (
+  echo Cerrando proceso anterior en puerto 3000 (PID %%p)...
+  taskkill /PID %%p /F >nul 2>&1
+)
+
 :: Iniciar ngrok en una ventana separada
 start "ngrok - MBS Comunicaciones" cmd /k "ngrok http --domain=underrate-silk-librarian.ngrok-free.dev 3000"
 
