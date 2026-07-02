@@ -9,10 +9,12 @@ echo.
 
 :: Liberar puerto 3000 si ya esta ocupado
 echo Verificando puerto 3000...
-for /f "tokens=5" %%p in ('netstat -ano ^| findstr ":3000 " ^| findstr "LISTENING"') do (
-  echo Cerrando proceso anterior en puerto 3000 (PID %%p)...
+netstat -ano | findstr ":3000" | findstr "LISTENING" > "%TEMP%\mbs_port.tmp" 2>nul
+for /f "tokens=5" %%p in (%TEMP%\mbs_port.tmp) do (
+  echo Cerrando proceso en puerto 3000 (PID %%p)...
   taskkill /PID %%p /F >nul 2>&1
 )
+del "%TEMP%\mbs_port.tmp" >nul 2>&1
 
 :: Iniciar ngrok en una ventana separada
 start "ngrok - MBS Comunicaciones" cmd /k "ngrok http --domain=underrate-silk-librarian.ngrok-free.dev 3000"
