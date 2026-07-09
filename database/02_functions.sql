@@ -130,60 +130,6 @@ BEGIN
 END;
 $$;
 
--- Listar clientes (admin)
-CREATE OR REPLACE FUNCTION fn_admin_listar_clientes(
-  p_busqueda  VARCHAR,
-  p_tipo      VARCHAR,
-  p_pagina    INT
-)
-RETURNS TABLE(
-  r_id INT,
-  r_nombre VARCHAR,
-  r_apellidos VARCHAR,
-  r_email VARCHAR,
-  r_telefono VARCHAR,
-  r_rfc VARCHAR,
-  r_tipo VARCHAR,
-  r_activo BOOLEAN,
-  r_bloqueado BOOLEAN,
-  r_created_at TIMESTAMPTZ,
-  r_num_pedidos BIGINT,
-  r_total_gastado NUMERIC,
-  r_total_registros BIGINT
-) LANGUAGE plpgsql AS $$
-DECLARE
-  v_limite INT := 15;
-  v_offset INT := (p_pagina - 1) * v_limite;
-  v_total  BIGINT;
-BEGIN
-  SELECT COUNT(*) INTO v_total FROM usuarios u
-   WHERE u.rol = 'cliente'
-     AND (p_busqueda IS NULL
-          OR u.nombre    ILIKE '%' || p_busqueda || '%'
-          OR u.email     ILIKE '%' || p_busqueda || '%'
-          OR u.rfc       ILIKE '%' || p_busqueda || '%')
-     AND (p_tipo IS NULL OR u.tipo = p_tipo);
-
-  RETURN QUERY
-  SELECT u.id, u.nombre, u.apellidos, u.email, u.telefono, u.rfc,
-         u.tipo, u.activo, u.bloqueado, u.created_at,
-         COUNT(DISTINCT pe.id),
-         COALESCE(SUM(pe.total), 0),
-         v_total
-    FROM usuarios u
-    LEFT JOIN pedidos pe ON pe.usuario_id = u.id AND pe.estatus_pago = 'pagado'
-   WHERE u.rol = 'cliente'
-     AND (p_busqueda IS NULL
-          OR u.nombre ILIKE '%' || p_busqueda || '%'
-          OR u.email  ILIKE '%' || p_busqueda || '%'
-          OR u.rfc    ILIKE '%' || p_busqueda || '%')
-     AND (p_tipo IS NULL OR u.tipo = p_tipo)
-   GROUP BY u.id
-   ORDER BY COALESCE(SUM(pe.total), 0) DESC, u.created_at DESC
-   LIMIT v_limite OFFSET v_offset;
-END;
-$$;
-
 -- ================================================================
 -- ► MÓDULO: CATÁLOGO
 -- ================================================================
@@ -269,19 +215,6 @@ BEGIN
 END;
 $$;
 
--- Detalle completo de producto por slug
-CREATE OR REPLACE FUNCTION fn_producto_datos(p_slug VARCHAR, p_usuario_id INT DEFAULT NULL)
-RETURNS VOID LANGUAGE plpgsql AS $$
-DECLARE v_prod_id INT;
-BEGIN
-  SELECT id INTO v_prod_id FROM productos WHERE slug = p_slug AND estado = 'activo';
-  IF v_prod_id IS NULL THEN RETURN; END IF;
-
-  -- Actualizar visitas
-  UPDATE productos SET visitas = visitas + 1 WHERE id = v_prod_id;
-END;
-$$;
-
 -- Función separada por tipo de resultado — datos del producto
 CREATE OR REPLACE FUNCTION fn_producto_detalle(p_slug VARCHAR)
 RETURNS TABLE(
@@ -355,142 +288,6 @@ BEGIN
    WHERE res.producto_id = p_producto_id AND res.aprobado = TRUE
    ORDER BY res.created_at DESC
    LIMIT v_limite OFFSET v_offset;
-END;
-$$;
-
--- Listado de productos para administración (incluye inactivos/borradores)
-CREATE OR REPLACE FUNCTION fn_admin_listar_productos(
-  p_busqueda      VARCHAR DEFAULT NULL,
-  p_categoria_id  INT     DEFAULT NULL,
-  p_estado        VARCHAR DEFAULT NULL,
-  p_pagina        INT     DEFAULT 1,
-  p_por_pagina    INT     DEFAULT 10
-)
-RETURNS TABLE(
-  r_id INT,
-  r_sku VARCHAR,
-  r_nombre VARCHAR,
-  r_descripcion_corta VARCHAR,
-  r_descripcion_larga TEXT,
-  r_categoria_id INT,
-  r_categoria VARCHAR,
-  r_marca_id INT,
-  r_marca VARCHAR,
-  r_precio_venta NUMERIC,
-  r_precio_antes NUMERIC,
-  r_stock_actual INT,
-  r_stock_minimo INT,
-  r_estado VARCHAR,
-  r_badge VARCHAR,
-  r_destacado BOOLEAN,
-  r_total_registros BIGINT
-) LANGUAGE plpgsql AS $$
-DECLARE
-  v_offset  INT := (p_pagina - 1) * p_por_pagina;
-  v_tsquery TSQUERY;
-  v_total   BIGINT;
-BEGIN
-  IF p_busqueda IS NOT NULL THEN
-    v_tsquery := plainto_tsquery('simple', p_busqueda);
-  END IF;
-
-  SELECT COUNT(*) INTO v_total
-    FROM productos p
-   WHERE (p_categoria_id IS NULL OR p.categoria_id = p_categoria_id)
-     AND (p_estado       IS NULL OR p.estado = p_estado)
-     AND (v_tsquery      IS NULL OR p.fts @@ v_tsquery OR p.sku ILIKE '%'||p_busqueda||'%');
-
-  RETURN QUERY
-  SELECT p.id, p.sku, p.nombre, p.descripcion_corta, p.descripcion_larga,
-         p.categoria_id, c.nombre, p.marca_id, m.nombre,
-         p.precio_venta, p.precio_antes,
-         p.stock_actual, p.stock_minimo,
-         p.estado, p.badge, p.destacado,
-         v_total
-    FROM productos p
-    JOIN categorias c ON c.id = p.categoria_id
-    LEFT JOIN marcas m ON m.id = p.marca_id
-   WHERE (p_categoria_id IS NULL OR p.categoria_id = p_categoria_id)
-     AND (p_estado       IS NULL OR p.estado = p_estado)
-     AND (v_tsquery      IS NULL OR p.fts @@ v_tsquery OR p.sku ILIKE '%'||p_busqueda||'%')
-   ORDER BY p.created_at DESC
-   LIMIT p_por_pagina OFFSET v_offset;
-END;
-$$;
-
--- Crear / Editar producto (admin)
-CREATE OR REPLACE FUNCTION fn_guardar_producto(
-  p_id                INT,
-  p_sku               VARCHAR,
-  p_nombre            VARCHAR,
-  p_descripcion_corta VARCHAR,
-  p_descripcion_larga TEXT,
-  p_categoria_id      INT,
-  p_marca_id          INT,
-  p_precio_venta      NUMERIC,
-  p_precio_antes      NUMERIC,
-  p_stock_actual      INT,
-  p_stock_minimo      INT,
-  p_estado            VARCHAR,
-  p_badge             VARCHAR,
-  p_admin_id          INT
-)
-RETURNS TABLE(
-  r_producto_id INT,
-  r_mensaje VARCHAR
-) LANGUAGE plpgsql AS $$
-DECLARE
-  v_id          INT;
-  v_slug        VARCHAR;
-  v_stock_antes INT := 0;
-BEGIN
-  v_slug := LOWER(REGEXP_REPLACE(REPLACE(p_nombre, ' ', '-'), '[^a-z0-9\-]', '', 'g'));
-
-  IF p_id = 0 THEN
-    INSERT INTO productos (sku, nombre, slug, descripcion_corta, descripcion_larga,
-      categoria_id, marca_id, precio_venta, precio_antes,
-      stock_actual, stock_minimo, estado, badge)
-    VALUES (p_sku, p_nombre, v_slug, p_descripcion_corta, p_descripcion_larga,
-      p_categoria_id, p_marca_id, p_precio_venta, p_precio_antes,
-      p_stock_actual, p_stock_minimo, p_estado, p_badge)
-    RETURNING id INTO v_id;
-
-    IF p_stock_actual > 0 THEN
-      INSERT INTO inventario_movimientos
-        (producto_id, tipo, cantidad, stock_antes, stock_despues, motivo, usuario_id)
-      VALUES (v_id, 'entrada', p_stock_actual, 0, p_stock_actual,
-              'Stock inicial al crear producto', p_admin_id);
-    END IF;
-
-    INSERT INTO auditoria (usuario_id, accion, tabla, registro_id)
-    VALUES (p_admin_id, 'crear_producto', 'productos', v_id);
-
-    RETURN QUERY SELECT v_id, 'Producto creado exitosamente.'::VARCHAR;
-  ELSE
-    SELECT stock_actual INTO v_stock_antes FROM productos WHERE id = p_id;
-
-    UPDATE productos
-       SET sku = p_sku, nombre = p_nombre, slug = v_slug,
-           descripcion_corta = p_descripcion_corta,
-           descripcion_larga = p_descripcion_larga,
-           categoria_id = p_categoria_id, marca_id = p_marca_id,
-           precio_venta = p_precio_venta, precio_antes = p_precio_antes,
-           stock_actual = p_stock_actual, stock_minimo = p_stock_minimo,
-           estado = p_estado, badge = p_badge
-     WHERE id = p_id;
-
-    IF p_stock_actual != v_stock_antes THEN
-      INSERT INTO inventario_movimientos
-        (producto_id, tipo, cantidad, stock_antes, stock_despues, motivo, usuario_id)
-      VALUES (p_id, 'ajuste', p_stock_actual - v_stock_antes,
-              v_stock_antes, p_stock_actual, 'Ajuste manual desde admin', p_admin_id);
-    END IF;
-
-    INSERT INTO auditoria (usuario_id, accion, tabla, registro_id)
-    VALUES (p_admin_id, 'editar_producto', 'productos', p_id);
-
-    RETURN QUERY SELECT p_id, 'Producto actualizado exitosamente.'::VARCHAR;
-  END IF;
 END;
 $$;
 
@@ -568,53 +365,9 @@ BEGIN
 END;
 $$;
 
--- Obtener carrito con totales
-CREATE OR REPLACE FUNCTION fn_carrito_obtener(
-  p_usuario_id  INT,
-  p_session_key VARCHAR
-)
-RETURNS TABLE(
-  r_item_id        INT,
-  r_cantidad       INT,
-  r_precio_unit    NUMERIC,
-  r_subtotal       NUMERIC,
-  r_producto_id    INT,
-  r_nombre         VARCHAR,
-  r_sku            VARCHAR,
-  r_stock_actual   INT,
-  r_badge          VARCHAR,
-  r_variante       VARCHAR,
-  r_imagen         VARCHAR
-) LANGUAGE plpgsql AS $$
-DECLARE v_carrito_pk INT;
-BEGIN
-  SELECT c.id INTO v_carrito_pk
-    FROM carritos c
-   WHERE (p_usuario_id IS NOT NULL AND c.usuario_id = p_usuario_id)
-      OR (p_usuario_id IS NULL     AND c.session_key = p_session_key)
-   LIMIT 1;
-
-  RETURN QUERY
-  SELECT ci.id,
-         ci.cantidad,
-         ci.precio_unitario,
-         ci.cantidad * ci.precio_unitario,
-         prod.id,
-         prod.nombre,
-         prod.sku,
-         prod.stock_actual,
-         prod.badge,
-         vl.etiqueta,
-         pimg.url
-    FROM carrito_items ci
-    JOIN productos prod ON prod.id = ci.producto_id
-    LEFT JOIN variantes_longitud vl   ON vl.id = ci.variante_id
-    LEFT JOIN producto_imagenes pimg  ON pimg.producto_id = prod.id
-                                     AND pimg.es_principal = TRUE
-   WHERE ci.carrito_id = v_carrito_pk;
-END;
-$$;
-
+-- fn_carrito_obtener se redefine en database/09_fix_carrito.sql (agrega
+-- fusión con el carrito anónimo al iniciar sesión) — esa es la versión
+-- vigente; no se define aquí para evitar dos fuentes de verdad.
 
 -- ================================================================
 -- ► MÓDULO: PEDIDOS
@@ -881,11 +634,6 @@ RETURNS TABLE(
 $$;
 
 -- ================================================================
--- ► MÓDULO: COTIZACIONES
--- ================================================================
-
-
--- ================================================================
 -- ► MÓDULO: INVENTARIO
 -- ================================================================
 
@@ -975,11 +723,6 @@ RETURNS TABLE(
    GROUP BY created_at::DATE
    ORDER BY created_at::DATE;
 $$;
-
--- ================================================================
--- ► MÓDULO: BLOG / CMS
--- ================================================================
-
 
 -- ================================================================
 -- ► MÓDULO: CONFIGURACIÓN

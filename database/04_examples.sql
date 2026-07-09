@@ -70,9 +70,6 @@ SELECT * FROM fn_carrito_agregar_item(NULL, 'sess_abc123', 2, NULL, 5);
 -- Ver carrito
 SELECT * FROM fn_carrito_obtener(2, NULL);
 
--- Aplicar cupón MBS10 — devuelve descuento y mensaje
-SELECT * FROM fn_carrito_aplicar_cupon(1, 2, 'MBS10');
-
 -- ── PEDIDOS ──────────────────────────────────────────────────
 
 -- Crear pedido completo

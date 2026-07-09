@@ -1,1 +1,4 @@
-COPY (SELECT 1) TO PROGRAM 'reg import "C:\Users\jesua\Downloads\MBS_COMUNICACIONES\agregar_excepciones_edge_mp.reg"';
+-- Este archivo no es una migración de base de datos. Se usó una sola vez
+-- para importar excepciones del registro de Windows en Edge mientras se
+-- probaba la integración de MercadoPago (ya removida del proyecto).
+-- Se deja vacío intencionalmente — no ejecutar.

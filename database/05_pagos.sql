@@ -416,21 +416,6 @@ BEGIN
 END;
 $$;
 
--- Marcar referencias SPEI vencidas (ejecutar periódicamente con pg_cron o desde el backend)
-CREATE OR REPLACE FUNCTION fn_vencer_referencias_spei()
-RETURNS INT LANGUAGE plpgsql AS $$
-DECLARE v_total INT;
-BEGIN
-  UPDATE pago_referencias
-     SET estado = 'vencido'
-   WHERE estado = 'pendiente'
-     AND vence_en < NOW();
-
-  GET DIAGNOSTICS v_total = ROW_COUNT;
-  RETURN v_total;
-END;
-$$;
-
 -- Consultar estado de pago de un pedido (resume toda la info de pago)
 CREATE OR REPLACE FUNCTION fn_estado_pago_pedido(p_pedido_id INT)
 RETURNS TABLE(

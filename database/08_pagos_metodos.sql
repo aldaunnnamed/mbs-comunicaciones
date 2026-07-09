@@ -3,17 +3,9 @@
 --  Ejecutar: psql -U postgres -d mbs_comunicaciones -f database/08_pagos_metodos.sql
 -- ================================================================
 
-CREATE TABLE IF NOT EXISTS metodos_pago (
-  id            SERIAL PRIMARY KEY,
-  clave         VARCHAR(50) UNIQUE NOT NULL,
-  nombre        VARCHAR(100) NOT NULL,
-  descripcion   VARCHAR(255),
-  comision      NUMERIC(5,2)  DEFAULT 0,
-  comision_fija NUMERIC(10,2) DEFAULT 0,
-  activo        BOOLEAN DEFAULT TRUE,
-  created_at    TIMESTAMPTZ DEFAULT NOW(),
-  updated_at    TIMESTAMPTZ DEFAULT NOW()
-);
+-- La tabla metodos_pago ya se crea en 01_schema.sql (con columna config_json,
+-- sin created_at/updated_at) — no se redefine aquí para evitar dos esquemas
+-- distintos del mismo nombre. Este archivo solo sembraba los datos.
 
 INSERT INTO metodos_pago (clave, nombre, descripcion, comision, comision_fija, activo) VALUES
 ('tarjeta',  'Tarjeta crédito/débito',  'Visa y Mastercard via Stripe',          2.9, 3.0, true),

@@ -371,7 +371,6 @@ CREATE TABLE IF NOT EXISTS pedidos (
   metodo_envio_id     INT           REFERENCES metodos_envio(id) ON DELETE SET NULL,
   paqueteria          VARCHAR(80),
   numero_guia         VARCHAR(100),
-  -- Cupón snapshot
   -- Notas y factura
   notas_cliente       TEXT,
   notas_internas      TEXT,

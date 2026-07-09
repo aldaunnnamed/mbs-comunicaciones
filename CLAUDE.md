@@ -65,7 +65,11 @@ To reset functions without dropping schema:
 ```bash
 psql -U postgres -d mbs_comunicaciones -f database/00_drop_functions.sql
 psql -U postgres -d mbs_comunicaciones -f database/02_functions.sql
+psql -U postgres -d mbs_comunicaciones -f database/09_fix_carrito.sql
 ```
+
+`09_fix_carrito.sql` must be re-applied after this reset — `fn_carrito_obtener` is only
+defined there (not in `02_functions.sql`), so skipping it leaves the cart broken.
 
 ### Environment
 
@@ -146,7 +150,6 @@ The schema owns most business logic through stored functions prefixed `fn_`. Con
 
 Key stored functions:
 - `fn_crear_pedido(...)` — transactional checkout: stock validation, price snapshot, inventory movement, coupon consumption, cart cleanup, notification
-- `fn_guardar_producto(id=0, ...)` — creates when `id=0`, updates otherwise; auto-registers inventory movement
 - `fn_listar_productos(...)` — full-text search via `tsvector` field (`fts`) with `unaccent` support
 - `fn_carrito_agregar_item(usuario_id, session_key, ...)` — supports both auth and anonymous sessions
 
