@@ -206,10 +206,10 @@ BEGIN
      AND (v_tsquery      IS NULL  OR pr.fts @@ v_tsquery)
    GROUP BY pr.id, cat.nombre, mar.nombre, pim.url
    ORDER BY
-     CASE WHEN p_orden = 'precio_asc'  THEN pr.precio_venta::TEXT END ASC  NULLS LAST,
-     CASE WHEN p_orden = 'precio_desc' THEN pr.precio_venta::TEXT END DESC NULLS LAST,
-     CASE WHEN p_orden = 'nombre'      THEN pr.nombre             END ASC  NULLS LAST,
-     CASE WHEN p_orden = 'nuevo'       THEN pr.created_at::TEXT   END DESC NULLS LAST,
+     CASE WHEN p_orden = 'precio_asc'  THEN pr.precio_venta END ASC  NULLS LAST,
+     CASE WHEN p_orden = 'precio_desc' THEN pr.precio_venta END DESC NULLS LAST,
+     CASE WHEN p_orden = 'nombre'      THEN pr.nombre       END ASC  NULLS LAST,
+     CASE WHEN p_orden = 'nuevo'       THEN pr.created_at   END DESC NULLS LAST,
      pr.ventas_totales DESC
    LIMIT p_por_pagina OFFSET v_offset;
 END;
