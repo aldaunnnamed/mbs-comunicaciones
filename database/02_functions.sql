@@ -306,6 +306,7 @@ RETURNS TABLE(resultado_carrito_id INT, resultado_mensaje VARCHAR)
 LANGUAGE plpgsql AS $$
 DECLARE
   v_precio       NUMERIC;
+  v_extra        NUMERIC := 0;
   v_stock        INT;
   v_carrito_pk   INT;
   v_cant_actual  INT := 0;
@@ -319,6 +320,20 @@ BEGIN
   IF v_precio IS NULL THEN
     RETURN QUERY SELECT 0::INT, 'Producto no disponible.'::VARCHAR;
     RETURN;
+  END IF;
+
+  -- Si hay variante, su stock y precio_extra mandan sobre el producto padre
+  IF p_variante_id IS NOT NULL THEN
+    SELECT precio_extra, stock
+      INTO v_extra, v_stock
+      FROM variantes_longitud
+     WHERE id = p_variante_id AND producto_id = p_producto_id AND activa = TRUE;
+
+    IF v_extra IS NULL THEN
+      RETURN QUERY SELECT 0::INT, 'Variante no disponible.'::VARCHAR;
+      RETURN;
+    END IF;
+    v_precio := v_precio + v_extra;
   END IF;
 
   -- Buscar carrito existente del usuario o sesión
@@ -336,13 +351,17 @@ BEGIN
   END IF;
 
   -- Ver cuánto hay ya en el carrito de ese producto/variante
-  SELECT COALESCE(ci.cantidad, 0)
-    INTO v_cant_actual
-    FROM carrito_items ci
-   WHERE ci.carrito_id = v_carrito_pk
-     AND ci.producto_id = p_producto_id
-     AND (ci.variante_id = p_variante_id
-          OR (ci.variante_id IS NULL AND p_variante_id IS NULL));
+  -- (subconsulta escalar: si no hay fila coincidente, COALESCE sigue devolviendo 0
+  --  en vez de NULL — con "SELECT ... INTO" directo, 0 filas deja v_cant_actual en NULL
+  --  y "NULL > v_stock" se evalúa como NULL, saltándose la validación de stock siguiente)
+  SELECT COALESCE((
+    SELECT ci.cantidad
+      FROM carrito_items ci
+     WHERE ci.carrito_id = v_carrito_pk
+       AND ci.producto_id = p_producto_id
+       AND (ci.variante_id = p_variante_id
+            OR (ci.variante_id IS NULL AND p_variante_id IS NULL))
+  ), 0) INTO v_cant_actual;
 
   -- Validar stock suficiente
   IF (v_cant_actual + p_cantidad) > v_stock THEN
@@ -428,15 +447,21 @@ BEGIN
   SELECT * INTO v_dir FROM direcciones WHERE id = p_direccion_id;
 
   -- Validar stock ítem por ítem ANTES de insertar
+  -- (si el ítem tiene variante, el stock real vive en variantes_longitud, no en el producto padre)
   FOR v_item IN
-    SELECT ci.producto_id, ci.cantidad, p.nombre
+    SELECT ci.producto_id, ci.variante_id, ci.cantidad, p.nombre
       FROM carrito_items ci JOIN productos p ON p.id = ci.producto_id
      WHERE ci.carrito_id = p_carrito_id
   LOOP
-    SELECT stock_actual INTO v_stock_actual
-      FROM productos WHERE id = v_item.producto_id;
+    IF v_item.variante_id IS NOT NULL THEN
+      SELECT stock INTO v_stock_actual
+        FROM variantes_longitud WHERE id = v_item.variante_id;
+    ELSE
+      SELECT stock_actual INTO v_stock_actual
+        FROM productos WHERE id = v_item.producto_id;
+    END IF;
 
-    IF v_stock_actual < v_item.cantidad THEN
+    IF v_stock_actual IS NULL OR v_stock_actual < v_item.cantidad THEN
       RETURN QUERY SELECT 0, ''::VARCHAR,
         ('Stock insuficiente: ' || v_item.nombre)::VARCHAR;
       RETURN;
@@ -464,7 +489,7 @@ BEGIN
   FOR v_item IN
     SELECT ci.producto_id, ci.variante_id, ci.cantidad, ci.precio_unitario,
            p.nombre, p.sku, vl.etiqueta AS variante_nombre,
-           p.stock_actual AS stock_antes
+           COALESCE(vl.stock, p.stock_actual) AS stock_antes
       FROM carrito_items ci
       JOIN productos p ON p.id = ci.producto_id
       LEFT JOIN variantes_longitud vl ON vl.id = ci.variante_id
@@ -478,10 +503,20 @@ BEGIN
             v_item.cantidad, v_item.precio_unitario,
             v_item.precio_unitario * v_item.cantidad);
 
-    UPDATE productos
-       SET stock_actual    = stock_actual - v_item.cantidad,
-           ventas_totales  = ventas_totales + v_item.cantidad
-     WHERE id = v_item.producto_id;
+    -- El stock real a descontar vive en la variante cuando el ítem tiene una
+    IF v_item.variante_id IS NOT NULL THEN
+      UPDATE variantes_longitud
+         SET stock = stock - v_item.cantidad
+       WHERE id = v_item.variante_id;
+      UPDATE productos
+         SET ventas_totales = ventas_totales + v_item.cantidad
+       WHERE id = v_item.producto_id;
+    ELSE
+      UPDATE productos
+         SET stock_actual   = stock_actual - v_item.cantidad,
+             ventas_totales = ventas_totales + v_item.cantidad
+       WHERE id = v_item.producto_id;
+    END IF;
 
     INSERT INTO inventario_movimientos
       (producto_id, tipo, cantidad, stock_antes, stock_despues,
