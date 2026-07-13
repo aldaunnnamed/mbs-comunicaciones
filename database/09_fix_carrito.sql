@@ -36,7 +36,12 @@ BEGIN
          prod.id,
          prod.nombre,
          prod.sku,
-         prod.stock_actual,
+         -- El stock disponible real es el de la variante (si el ítem tiene una),
+         -- no el del producto padre — igual que en fn_carrito_agregar_item y
+         -- en el controlador actualizarCantidad. Antes siempre se devolvía
+         -- prod.stock_actual, mostrando un límite incorrecto en el carrito
+         -- para productos con variantes de longitud.
+         COALESCE(vl.stock, prod.stock_actual),
          prod.badge,
          vl.etiqueta,
          pimg.url
