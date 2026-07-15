@@ -142,5 +142,38 @@ Ordenadas por prioridad:
 
 1. **Configurar webhook secrets de Stripe y PayPal** desde sus dashboards y cargarlos en Admin → Configuración → Pagos.
 2. **Definir política CSP** que permita los dominios de PayPal/Stripe y activarla en `app.js`.
-3. **Decidir sobre `cotizaciones`, `blog_articulos`, `newsletter`, `tarjetas_guardadas`**: implementar la capa Express o eliminar las tablas.
+3. ~~Decidir sobre `cotizaciones`, `blog_articulos`, `newsletter`~~ — resuelto, ver addendum: se eliminaron (`tarjetas_guardadas` también, en una pasada anterior del addendum).
 4. **Limpiar las 37 filas sin `seccion`** en `configuracion` (verificar primero que ningún código las lea).
+
+---
+
+## Addendum — 15 de julio de 2026
+
+Los apartados anteriores (fechados 25 jun / 2 jul) describen un estado de la base de datos que **ya no corresponde a la BD local actual**: la sección 7 de este documento reporta "10 usuarios reales · 12 productos reales" tras la limpieza de datos de prueba, y la línea 49 registra la fila `mercadopago` como "referenciada por 35 pedidos" y la de `contado` como referenciada por 21. Al revisar hoy la misma base de datos local, se encontraron solo 1–2 productos de prueba, 0 pedidos ligados a `mercadopago`/`entrega`/`contado`, y un total de 4 pedidos en toda la tabla — consistente con un reseteo/resiembra ocurrido después del 2 de julio, no con las cifras que documenta esta auditoría. Si en algún momento vuelve a existir una base de datos de producción separada con historial real, **revalidar contra ella** antes de asumir que lo siguiente sigue vigente ahí.
+
+Cambios aplicados hoy sobre esta base (detalle completo en `CLAUDE.md` y `docs/MBS_DB_README.md`):
+
+- **Tablas huérfanas eliminadas** (0 filas, 0 referencias en código, verificado antes de borrar): `sesiones`, `recuperacion_password` y `tarjetas_guardadas` — esta última ya estaba señalada como pendiente en la sección "🟡 Pendientes" de este documento (línea 79) y en la lista de acciones restantes. Migración: `database/migrations/13_drop_tablas_huerfanas.sql`. `01_schema.sql` actualizado para no volver a crearlas.
+- **Duplicado de `metodos_pago` corregido**: `08_pagos_metodos.sql` insertaba `entrega` con `ON CONFLICT DO NOTHING` mientras `03_seed_data.sql` ya insertaba `contado` con el mismo nombre ("Pago contra entrega") — ambas claves coexistían como filas separadas. Se dejó `03_seed_data.sql` como única fuente del seed de `metodos_pago`; `08_pagos_metodos.sql` ahora solo siembra configuración de pasarelas. En esta BD (0 pedidos en cualquiera de las dos filas) se eliminó `entrega` y la fila residual `mercadopago` (también 0 pedidos aquí, a diferencia de los 35 que reporta este documento para un estado anterior).
+- **Scripts fusionados a los archivos base** (eliminados tras la fusión): `09_fix_carrito.sql` → `02_functions.sql`; `migrations/10_spei_stripe.sql` → `05_pagos.sql`; `migrations/11_notas_pedido.sql` → `02_functions.sql`. El orden de instalación limpio quedó en 7 scripts: `01→02→03→05→06→07→08`.
+- **Scripts de un solo uso eliminados** (ya inservibles): `migrations/run_reg.sql`, `migrations/migracion_fix_duplicados_seed.sql`.
+- **Documentación de cupones corregida**: `docs/MBS_DB_README.md` documentaba `cupones`/`cupon_usos`/`fn_carrito_aplicar_cupon` como si fueran parte del esquema vigente. Corrección a esta misma nota (ver punto siguiente): sí existían, pero solo como *drift* — nunca en los scripts versionados.
+
+### Corrección al punto anterior + hallazgo mayor: 9 tablas y 5 funciones de drift
+
+Al revisar el pendiente "decidir sobre `cotizaciones`, `blog_articulos`, `newsletter`" (línea 79 / lista de acciones restantes), se encontró que estas tablas **sí existen físicamente en la BD local**, a pesar de no estar en `01_schema.sql` — igual que `cupones`/`cupon_usos`, que se había afirmado arriba que "nunca existieron en el esquema" (impreciso: no existían en los *scripts*, pero sí como residuo vivo en la BD, incluida la función `fn_carrito_aplicar_cupon`).
+
+Inventario completo de drift encontrado y eliminado (0 filas en las 9 tablas, 0 referencias en `mbs_backend/src`, verificado antes de borrar):
+
+| Módulo | Tablas | Funciones |
+|---|---|---|
+| Blog/CMS | `blog_articulos`, `blog_categorias`, `blog_etiquetas`, `blog_articulo_etiquetas` | `fn_guardar_articulo` |
+| Cotizaciones | `cotizaciones`, `cotizacion_items` | `fn_generar_numero_cotizacion`, `fn_crear_cotizacion`, `fn_responder_cotizacion` |
+| Cupones | `cupones`, `cupon_usos` | `fn_carrito_aplicar_cupon` |
+| Newsletter | `newsletter` | — |
+
+También se encontraron y eliminaron las columnas `cupon_id` en `carritos` y `pedidos` (tablas reales y en uso) — tampoco estaban en `01_schema.sql`, apuntaban a `cupones` vía FK, y tenían 0 valores no nulos en ambas. Migración: `database/migrations/14_drop_blog_cotizaciones_cupones_newsletter.sql` (incluye chequeo de seguridad que aborta si alguna tabla tiene filas o esas columnas tienen valores).
+
+Todas estas tablas/funciones fueron removidas de los scripts versionados en el commit `b6413f7` (ver auditoría original, sección "Cotizaciones sin capa Express" línea 77 y "Tablas huérfanas" línea 79) pero nunca se eliminaron de las bases de datos ya aprovisionadas — una instalación nueva desde `01_schema.sql`/`02_functions.sql` jamás las crea.
+
+Verificado: instalación limpia end-to-end en una base de datos temporal (creada y eliminada), y 93/93 tests del backend pasando tras todos los cambios (incluida esta segunda tanda).

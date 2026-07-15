@@ -59,26 +59,8 @@ CREATE INDEX idx_usuarios_rol   ON usuarios(rol);
 CREATE INDEX idx_usuarios_tipo  ON usuarios(tipo);
 SELECT fn_crear_trigger_updated_at('usuarios');
 
-CREATE TABLE IF NOT EXISTS sesiones (
-  id          SERIAL          PRIMARY KEY,
-  usuario_id  INT             NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
-  token       VARCHAR(255)    NOT NULL UNIQUE,
-  ip          VARCHAR(45),
-  user_agent  VARCHAR(500),
-  expira_en   TIMESTAMPTZ     NOT NULL,
-  created_at  TIMESTAMPTZ     NOT NULL DEFAULT NOW()
-);
-CREATE INDEX idx_sesiones_token      ON sesiones(token);
-CREATE INDEX idx_sesiones_usuario    ON sesiones(usuario_id);
-
-CREATE TABLE IF NOT EXISTS recuperacion_password (
-  id          SERIAL          PRIMARY KEY,
-  usuario_id  INT             NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
-  token       VARCHAR(255)    NOT NULL UNIQUE,
-  usado       BOOLEAN         NOT NULL DEFAULT FALSE,
-  expira_en   TIMESTAMPTZ     NOT NULL,
-  created_at  TIMESTAMPTZ     NOT NULL DEFAULT NOW()
-);
+-- Nota: no hay tabla de sesiones — la autenticación es JWT stateless.
+-- La recuperación de contraseña usa password_resets (ver 07_contacto.sql).
 
 -- ================================================================
 -- 2. CATÁLOGO
@@ -295,18 +277,8 @@ CREATE TABLE IF NOT EXISTS metodos_pago (
   config_json   JSONB
 );
 
-CREATE TABLE IF NOT EXISTS tarjetas_guardadas (
-  id             SERIAL        PRIMARY KEY,
-  usuario_id     INT           NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
-  token_gateway  VARCHAR(255)  NOT NULL,
-  ultimos_4      CHAR(4)       NOT NULL,
-  marca          VARCHAR(20),
-  nombre_titular VARCHAR(100),
-  vence_mm       SMALLINT      NOT NULL,
-  vence_yy       SMALLINT      NOT NULL,
-  predeterminada BOOLEAN       NOT NULL DEFAULT FALSE,
-  created_at     TIMESTAMPTZ   NOT NULL DEFAULT NOW()
-);
+-- Nota: no hay tabla de tarjetas guardadas — los pagos con tarjeta van
+-- directo a Stripe/PayPal, que tokenizan y almacenan del lado del gateway.
 
 -- ================================================================
 -- 8. CARRITO

@@ -4,14 +4,21 @@
 
 ```
 database/
-├── 00_drop_functions.sql → Elimina funciones previas (opcional, antes de 02)
-├── 01_schema.sql         → Tablas, índices, triggers (611 líneas)
-├── 02_functions.sql      → Funciones / stored procedures (1,060 líneas)
-├── 03_seed_data.sql      → Datos iniciales y de prueba (192 líneas)
-├── 04_examples.sql       → Guía de uso con SELECTs listos (203 líneas)
-├── 05_pagos.sql          → Módulo de pagos: PayPal y SPEI/referencia bancaria
-├── 06_imagenes.sql       → Índices de producto_imagenes (referencia)
-└── 07_contacto.sql       → Tablas mensajes_contacto y password_resets
+├── 00_drop_functions.sql        → Elimina funciones previas (opcional, antes de 02)
+├── 01_schema.sql                → Tablas, índices, triggers
+├── 02_functions.sql             → Funciones / stored procedures (incluye carrito y notas de pedido)
+├── 03_seed_data.sql             → Datos iniciales y de prueba, incluye el seed único de metodos_pago
+├── 04_examples.sql               → Guía de uso con SELECTs listos (referencia — algunas funciones citadas ya no existen, ver nota abajo)
+├── 05_pagos.sql                  → Módulo de pagos: PayPal, SPEI legacy y SPEI vía Stripe (customer_balance)
+├── 06_imagenes.sql               → Índices de producto_imagenes (opcional/referencia)
+├── 07_contacto.sql               → Tablas mensajes_contacto y password_resets
+├── 08_pagos_metodos.sql          → Siembra solo la configuración de pasarelas (Stripe/PayPal); no siembra metodos_pago
+├── 12_remove_mercadopago.sql     → Elimina referencias a MercadoPago (ya aplicado; histórico)
+├── migrations/
+│   ├── 13_drop_tablas_huerfanas.sql → Elimina sesiones/recuperacion_password/tarjetas_guardadas (ya aplicado; histórico)
+│   └── 14_drop_blog_cotizaciones_cupones_newsletter.sql → Elimina 9 tablas + 5 funciones de drift (blog, cotizaciones, cupones, newsletter) y cupon_id en carritos/pedidos (ya aplicado; histórico)
+└── tools/
+    └── CHECK_firmas.sql          → Diagnóstico: verifica firmas de funciones almacenadas
 docs/
 └── MBS_DB_README.md      → Esta documentación
 ```
@@ -26,14 +33,17 @@ docs/
 Los archivos tienen dependencias entre sí. **Deben ejecutarse en este orden:**
 
 ```
-01_schema.sql  →  02_functions.sql  →  03_seed_data.sql  →  05_pagos.sql  →  07_contacto.sql
+01_schema.sql → 02_functions.sql → 03_seed_data.sql → 05_pagos.sql → 06_imagenes.sql →
+07_contacto.sql → 08_pagos_metodos.sql
 ```
 
 - `00_drop_functions.sql` es opcional: solo se usa para reinstalar `02_functions.sql` sin recrear el esquema.
 - `04_examples.sql` es solo de referencia, no se ejecuta en producción.
-- `05_pagos.sql` agrega las tablas y funciones de PayPal/SPEI — necesario para que `/api/pagos` funcione.
+- `05_pagos.sql` agrega las tablas y funciones de PayPal/SPEI, incluido el flujo SPEI vía Stripe (`customer_balance`, CLABE dinámica) en paralelo al flujo SPEI casero, seleccionable con la clave de configuración `spei_motor` (`legacy` | `stripe`) — necesario para que `/api/pagos` funcione.
 - `06_imagenes.sql` es opcional: solo agrega índices sobre `producto_imagenes` (la tabla ya existe en `01_schema.sql`).
 - `07_contacto.sql` crea `mensajes_contacto` (formulario de contacto) y `password_resets` (recuperación de contraseña), usados por el backend.
+- `08_pagos_metodos.sql` siembra solo la configuración de pasarelas (Stripe/PayPal). El seed de `metodos_pago` en sí vive únicamente en `03_seed_data.sql` — no se repite aquí para evitar filas duplicadas del mismo método bajo dos `clave` distintas.
+- `12_remove_mercadopago.sql` ya fue aplicado; se conserva solo como referencia histórica.
 
 ---
 
@@ -41,11 +51,8 @@ Los archivos tienen dependencias entre sí. **Deben ejecutarse en este orden:**
 
 ```
 USUARIOS
-  usuarios ──────────┬── sesiones
-                     ├── recuperacion_password
-                     ├── direcciones
+  usuarios ──────────┬── direcciones
                      ├── favoritos
-                     ├── tarjetas_guardadas
                      ├── notificaciones
                      └── auditoria
 
@@ -62,9 +69,6 @@ VENTAS
                      ├── pedido_historial
                      ├── pago_referencias (SPEI)
                      └── pago_paypal
-
-COMERCIAL
-  cupones ───────────┬── cupon_usos
 
 LOGÍSTICA
   metodos_envio
@@ -97,7 +101,8 @@ SISTEMA
 | `fn_obtener_perfil_cliente(usuario_id)` | Perfil completo con stats de pedidos, gastado, favoritos | `SELECT * FROM fn_obtener_perfil_cliente(2);` |
 | `fn_actualizar_datos_personales(id, nombre, apellidos, tel, rfc, razon)` | Editar perfil personal | `SELECT fn_actualizar_datos_personales(2,'Carlos','M.','+52...','RFC','Empresa SA');` |
 | `fn_toggle_bloqueo_cliente(usuario_id, bloqueado, motivo, admin_id)` | Bloquear o desbloquear cliente con auditoría | `SELECT fn_toggle_bloqueo_cliente(5, TRUE, 'Fraude detectado', 1);` |
-| `fn_admin_listar_clientes(busqueda, tipo, pagina)` | Tabla de clientes con búsqueda y paginación | `SELECT * FROM fn_admin_listar_clientes('TelCo', NULL, 1);` |
+
+> El listado de clientes del panel admin (búsqueda y paginación) no usa una función almacenada — es SQL inline en `admin.controller.js`. `fn_admin_listar_clientes` no existe en el esquema actual.
 
 ### Módulo: Catálogo
 
@@ -105,8 +110,9 @@ SISTEMA
 |---|---|---|
 | `fn_listar_productos(cat_id, marca_id, precio_min, precio_max, solo_stock, busqueda, orden, pagina, por_pagina)` | Listado con todos los filtros del catálogo, full-text con acentos | `SELECT * FROM fn_listar_productos(1,NULL,0,5000,TRUE,'SC','precio_asc',1,9);` |
 | `fn_producto_detalle(slug)` | Datos completos del producto por slug, incluye `r_categoria_id` y `r_categoria_nombre` (usados para cargar productos relacionados) | `SELECT * FROM fn_producto_detalle('cable-fo-monomodo-sc-upc-3mm');` |
-| `fn_guardar_producto(id, sku, nombre, desc_corta, desc_larga, cat_id, marca_id, precio, precio_antes, stock, stock_min, estado, badge, admin_id)` | Crear (id=0) o editar producto. Registra movimiento de inventario automáticamente | `SELECT * FROM fn_guardar_producto(0,'FO-SM-LC-001','Cable LC',...);` |
 | `fn_listar_resenas_producto(p_producto_id, p_pagina=1)` | Reseñas aprobadas de un producto, paginadas (10 por página) | `SELECT * FROM fn_listar_resenas_producto(1,1);` |
+
+> Crear/editar producto desde el panel admin no usa una función almacenada — es SQL inline (`INSERT`/`UPDATE` sobre `productos`) en `admin.controller.js`. `fn_guardar_producto` no existe en el esquema actual.
 
 ### Módulo: Carrito
 
@@ -114,7 +120,8 @@ SISTEMA
 |---|---|---|
 | `fn_carrito_agregar_item(usuario_id, session_key, producto_id, variante_id, cantidad)` | Agregar ítem validando stock. Soporta sesiones anónimas | `SELECT * FROM fn_carrito_agregar_item(2,NULL,1,3,2);` |
 | `fn_carrito_obtener(usuario_id, session_key)` | Items del carrito con totales e imagen | `SELECT * FROM fn_carrito_obtener(2,NULL);` |
-| `fn_carrito_aplicar_cupon(carrito_id, usuario_id, codigo)` | Validar y aplicar cupón. Revisa vigencia, usos y monto mínimo | `SELECT * FROM fn_carrito_aplicar_cupon(1,2,'MBS10');` |
+
+> No hay sistema de cupones/descuentos: ni tablas (`cupones`, `cupon_usos`), ni `fn_carrito_aplicar_cupon`, ni lógica en el backend o frontend. Nunca se implementó — quedó documentado en versiones anteriores de este archivo como si existiera.
 
 ### Módulo: Pedidos
 
@@ -124,19 +131,26 @@ SISTEMA
 | `fn_actualizar_estado_pedido(pedido_id, estado, paqueteria, guia, notas, admin_id)` | Cambiar estado con historial y notificación automática al cliente | `SELECT fn_actualizar_estado_pedido(1,'enviado','FedEx','749...',NULL,1);` |
 | `fn_listar_pedidos_cliente(usuario_id, estado, pagina)` | Pedidos del cliente filtrados por estado, paginados | `SELECT * FROM fn_listar_pedidos_cliente(2,'enviado',1);` |
 | `fn_detalle_pedido(pedido_id, usuario_id)` | Detalle completo: items, historial, dirección, métodos | `SELECT * FROM fn_detalle_pedido(1,2);` |
+| `fn_guardar_notas_pedido(pedido_id, notas, admin_id)` | Guarda notas internas del pedido sin disparar la notificación de "cambio de estado" al cliente | `SELECT fn_guardar_notas_pedido(1,'Cliente pidió factura después.',1);` |
+
+> Definida en `02_functions.sql`.
 
 ### Módulo: Pagos
 
-> Definidas en `05_pagos.sql`. Cubren las dos formas de pago activas: PayPal y SPEI/referencia bancaria.
+> Definidas en `05_pagos.sql`. Cubren las formas de pago activas: PayPal, SPEI/referencia bancaria (legacy) y SPEI vía Stripe `customer_balance` (CLABE dinámica), seleccionable con la clave de configuración `spei_motor` (`legacy` | `stripe`, controlado desde `pagos.controller.js`).
 
 | Función | Descripción | Ejemplo |
 |---|---|---|
-| `fn_crear_referencia_spei(pedido_id, clabe, banco, beneficiario, horas_vence=48)` | Genera una referencia SPEI única con monto y fecha límite, y marca el pedido como `pago_proveedor='spei'` | `SELECT * FROM fn_crear_referencia_spei(1,'646180111800000001','STP','MBS Comunicaciones',48);` |
-| `fn_confirmar_pago_spei(referencia, monto, clave_rastreo, banco_emisor, webhook_json)` | Llamada desde el webhook bancario: marca la referencia y el pedido como pagados, notifica al cliente y registra auditoría | `SELECT fn_confirmar_pago_spei('25000001234','349.00','MX12345...','BBVA','{}'::JSONB);` |
+| `fn_crear_referencia_spei(pedido_id, clabe, banco, beneficiario, horas_vence=48)` | Genera una referencia SPEI (motor legacy) única con monto y fecha límite, y marca el pedido como `pago_proveedor='spei'` | `SELECT * FROM fn_crear_referencia_spei(1,'646180111800000001','STP','MBS Comunicaciones',48);` |
+| `fn_confirmar_pago_spei(referencia, monto, clave_rastreo, banco_emisor, webhook_json)` | Llamada desde el webhook bancario (motor legacy): marca la referencia y el pedido como pagados, notifica al cliente y registra auditoría | `SELECT fn_confirmar_pago_spei('25000001234','349.00','MX12345...','BBVA','{}'::JSONB);` |
+| `fn_crear_referencia_spei_stripe(pedido_id, clabe, banco, beneficiario, referencia, stripe_customer_id, stripe_payment_intent_id, horas_vence=48)` | Igual que `fn_crear_referencia_spei` pero para el motor Stripe: persiste la CLABE dinámica ya generada por la API de Stripe | `SELECT * FROM fn_crear_referencia_spei_stripe(1,'646180...','STP','MBS Comunicaciones','25000001234','cus_...','pi_...',48);` |
+| `fn_confirmar_pago_spei_stripe(stripe_payment_intent_id, estado, monto, webhook_json)` | Llamada desde el webhook de Stripe (`payment_intent.processing` / `.succeeded` / `.payment_failed`); `estado` es `procesando`, `pagado`, `fallido` o `vencido` | `SELECT fn_confirmar_pago_spei_stripe('pi_123','pagado',349.00,'{}'::JSONB);` |
 | `fn_crear_orden_paypal(pedido_id, order_id, url_aprobacion)` | Guarda la orden creada en PayPal (estado `CREATED`) y marca el pedido como `pago_proveedor='paypal'` | `SELECT fn_crear_orden_paypal(1,'8RA97X14K8765432L','https://www.paypal.com/checkoutnow?token=...');` |
 | `fn_confirmar_pago_paypal(order_id, capture_id, estado, monto, comision, email_pagador, webhook_json)` | Llamada desde la captura síncrona y desde el webhook de PayPal: actualiza `pago_paypal`, y si `estado='COMPLETED'` marca el pedido como pagado, notifica y audita. Es idempotente: si la orden ya estaba `COMPLETED`, una segunda llamada con `estado='COMPLETED'` no repite la notificación/auditoría | `SELECT fn_confirmar_pago_paypal('8RA97X14K8765432L','3C679366YS',...);` |
-| `fn_vencer_referencias_spei()` | Marca como `vencido` las referencias SPEI con `vence_en < NOW()`. Pensada para ejecutarse periódicamente | `SELECT fn_vencer_referencias_spei();` |
+| `fn_marcar_pedido_pagado_manual(pedido_id, admin_id, nota)` | Marca un pedido como pagado manualmente desde el panel admin (pedidos legacy sin webhook, o cualquier caso fuera de banda); también cierra referencias SPEI pendientes/procesando | `SELECT fn_marcar_pedido_pagado_manual(1,1,'Confirmado por telefono con el cliente.');` |
 | `fn_estado_pago_pedido(pedido_id)` | Resume el estado de pago de un pedido: estatus general + datos de SPEI y PayPal en una sola fila | `SELECT * FROM fn_estado_pago_pedido(1);` |
+
+> `fn_vencer_referencias_spei()` está documentada en `04_examples.sql` pero no existe como función almacenada en el esquema actual — no invocarla.
 
 ### Módulo: Inventario
 
@@ -184,17 +198,15 @@ SISTEMA
 2. fn_listar_productos()        → Navegar el catálogo con filtros
 3. fn_producto_detalle()        → Ver detalle de un producto
 4. fn_carrito_agregar_item()    → Agregar al carrito
-5. fn_carrito_aplicar_cupon()   → Aplicar descuento (opcional)
-6. fn_crear_pedido()            → Checkout — realiza todo en una transacción:
+5. fn_crear_pedido()            → Checkout — realiza todo en una transacción:
       ├── Valida stock ítem por ítem ANTES de insertar
       ├── Genera número MBS-2025-XXXXXX
       ├── Hace snapshot de dirección y precios (protege contra cambios futuros)
       ├── Descuenta stock de cada producto
       ├── Registra movimiento en inventario_movimientos
-      ├── Registra uso de cupón y aumenta usos_actuales
       ├── Elimina el carrito limpiamente
       └── Inserta notificación para el cliente
-7. fn_actualizar_estado_pedido() → Admin gestiona: en preparación → enviado → entregado
+6. fn_actualizar_estado_pedido() → Admin gestiona: en preparación → enviado → entregado
 ```
 
 ---
@@ -225,7 +237,7 @@ PAYPAL_SECRET=
 ## Notas de seguridad
 
 - Los `password_hash` se generan con **bcrypt factor 12** en el backend. Nunca se almacenan contraseñas en texto plano.
-- Los tokens de tarjeta (`token_gateway`) vienen de **Stripe o Conekta**. El número completo de tarjeta **nunca se almacena** en la base de datos.
+- Los pagos con tarjeta se procesan directo con **Stripe**; no hay tabla de tarjetas guardadas — la tokenización vive del lado del gateway y el número completo **nunca se almacena** en la base de datos.
 - La tabla `auditoria` registra con timestamp e IP todas las acciones administrativas sensibles.
 - La extensión `unaccent` permite búsquedas con y sin acentos (buscar "fibra" encuentra "fibra óptica").
 - El campo `fts` (tsvector) en `productos` se actualiza automáticamente por trigger cada vez que se inserta o edita un registro.

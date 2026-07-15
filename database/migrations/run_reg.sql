@@ -1,4 +1,0 @@
--- Este archivo no es una migración de base de datos. Se usó una sola vez
--- para importar excepciones del registro de Windows en Edge mientras se
--- probaba la integración de MercadoPago (ya removida del proyecto).
--- Se deja vacío intencionalmente — no ejecutar.

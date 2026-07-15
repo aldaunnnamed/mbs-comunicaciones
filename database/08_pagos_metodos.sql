@@ -3,17 +3,11 @@
 --  Ejecutar: psql -U postgres -d mbs_comunicaciones -f database/08_pagos_metodos.sql
 -- ================================================================
 
--- La tabla metodos_pago ya se crea en 01_schema.sql (con columna config_json,
--- sin created_at/updated_at) — no se redefine aquí para evitar dos esquemas
--- distintos del mismo nombre. Este archivo solo sembraba los datos.
-
-INSERT INTO metodos_pago (clave, nombre, descripcion, comision, comision_fija, activo) VALUES
-('tarjeta',  'Tarjeta crédito/débito',  'Visa y Mastercard via Stripe',          2.9, 3.0, true),
-('paypal',   'PayPal',                   'Pagos nacionales e internacionales',     3.5, 0.0, true),
-('spei',     'Transferencia SPEI',       'Depósito bancario. Sin comisión',        0.0, 0.0, true),
-('entrega',  'Pago contra entrega',      'Solo Querétaro. Pedidos < $5,000',       0.0, 0.0, true),
-('msi',      'Meses sin intereses',      '3, 6 y 12 MSI con tarjetas',             0.0, 0.0, false)
-ON CONFLICT (clave) DO NOTHING;
+-- El seed de metodos_pago vive únicamente en 03_seed_data.sql (claves:
+-- tarjeta, paypal, spei, contado, msi, cripto) — no se repite aquí para
+-- evitar filas duplicadas por ON CONFLICT (clave) DO NOTHING con una
+-- clave distinta para el mismo método (ej. 'entrega' vs 'contado').
+-- Este archivo solo siembra la configuración de pasarelas.
 
 -- Claves de API de pasarelas en tabla configuracion
 INSERT INTO configuracion (clave, valor, tipo, seccion, descripcion) VALUES

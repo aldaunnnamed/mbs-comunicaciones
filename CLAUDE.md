@@ -45,31 +45,26 @@ psql -U postgres -d mbs_comunicaciones -f database/05_pagos.sql
 psql -U postgres -d mbs_comunicaciones -f database/06_imagenes.sql
 psql -U postgres -d mbs_comunicaciones -f database/07_contacto.sql
 psql -U postgres -d mbs_comunicaciones -f database/08_pagos_metodos.sql
-psql -U postgres -d mbs_comunicaciones -f database/09_fix_carrito.sql
 # database/04_examples.sql is reference only — do not run in production
 ```
 
-- `05_pagos.sql` adds the PayPal/SPEI payment tables — required for `/api/pagos`.
+- `05_pagos.sql` adds the PayPal/SPEI payment tables, the parallel Stripe `customer_balance` SPEI flow (dynamic CLABE, selectable via the `spei_motor` config key: `legacy` | `stripe`), and manual payment confirmation (`fn_marcar_pedido_pagado_manual`) — required for `/api/pagos`.
 - `06_imagenes.sql` is optional: only adds indexes on `producto_imagenes` (the table already exists in `01_schema.sql`).
 - `07_contacto.sql` creates `mensajes_contacto` and `password_resets` — **required** for password recovery, the contact form, and the admin "Mensajes" panel.
-- `08_pagos_metodos.sql` creates and seeds the `metodos_pago` table (tarjeta, PayPal, SPEI, contado, MSI, cripto) — **required** for the checkout to show payment methods.
-- `09_fix_carrito.sql` rewrites `fn_carrito_obtener` to merge the anonymous cart when a user logs in — **required** for correct cart behavior after login.
+- `08_pagos_metodos.sql` seeds only the payment-gateway configuration (Stripe/PayPal keys in `configuracion`) — the `metodos_pago` rows themselves are seeded once, in `03_seed_data.sql`, to avoid duplicate rows for the same payment method under two different `clave`s.
 
 Other SQL files (not part of the setup sequence):
-- `database/migrations/` — one-off migration scripts (run manually when needed)
+- `database/migrations/13_drop_tablas_huerfanas.sql` — already applied; dropped the unused `sesiones`, `recuperacion_password`, `tarjetas_guardadas` tables. Kept for historical reference only.
+- `database/migrations/14_drop_blog_cotizaciones_cupones_newsletter.sql` — already applied; dropped 9 tables and 5 functions (blog/CMS, cotizaciones, cupones, newsletter) plus the `cupon_id` columns on `carritos`/`pedidos` — all schema drift never defined in any versioned script. Kept for historical reference only.
 - `database/tools/CHECK_firmas.sql` — diagnostic: verifies stored function signatures
-- `database/12_remove_mercadopago.sql` — removes MercadoPago references (already applied)
+- `database/12_remove_mercadopago.sql` — removes MercadoPago references (already applied; kept for historical reference only)
 
 To reset functions without dropping schema:
 
 ```bash
 psql -U postgres -d mbs_comunicaciones -f database/00_drop_functions.sql
 psql -U postgres -d mbs_comunicaciones -f database/02_functions.sql
-psql -U postgres -d mbs_comunicaciones -f database/09_fix_carrito.sql
 ```
-
-`09_fix_carrito.sql` must be re-applied after this reset — `fn_carrito_obtener` is only
-defined there (not in `02_functions.sql`), so skipping it leaves the cart broken.
 
 ### Environment
 
@@ -85,8 +80,8 @@ MBS_COMUNICACIONES/
 ├── iniciar_con_ngrok.bat        — starts ngrok + Node server together
 ├── iniciar_servidor.bat         — starts Node server only
 ├── database/
-│   ├── 00_drop_functions.sql … 09_fix_carrito.sql, 12_remove_mercadopago.sql
-│   ├── migrations/              — one-off scripts (run manually)
+│   ├── 00_drop_functions.sql … 08_pagos_metodos.sql, 12_remove_mercadopago.sql
+│   ├── migrations/              — one-off scripts, already applied (run manually if reverting)
 │   └── tools/                   — diagnostic queries (CHECK_firmas.sql)
 ├── docs/
 │   ├── MBS_DB_README.md         — full stored-function reference
