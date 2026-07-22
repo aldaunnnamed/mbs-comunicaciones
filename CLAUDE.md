@@ -42,22 +42,21 @@ psql -U postgres -d mbs_comunicaciones -f database/01_schema.sql
 psql -U postgres -d mbs_comunicaciones -f database/02_functions.sql
 psql -U postgres -d mbs_comunicaciones -f database/03_seed_data.sql
 psql -U postgres -d mbs_comunicaciones -f database/05_pagos.sql
-psql -U postgres -d mbs_comunicaciones -f database/06_imagenes.sql
-psql -U postgres -d mbs_comunicaciones -f database/07_contacto.sql
-psql -U postgres -d mbs_comunicaciones -f database/08_pagos_metodos.sql
-# database/04_examples.sql is reference only — do not run in production
 ```
 
-- `05_pagos.sql` adds the PayPal/SPEI payment tables, the parallel Stripe `customer_balance` SPEI flow (dynamic CLABE, selectable via the `spei_motor` config key: `legacy` | `stripe`), and manual payment confirmation (`fn_marcar_pedido_pagado_manual`) — required for `/api/pagos`.
-- `06_imagenes.sql` is optional: only adds indexes on `producto_imagenes` (the table already exists in `01_schema.sql`).
-- `07_contacto.sql` creates `mensajes_contacto` and `password_resets` — **required** for password recovery, the contact form, and the admin "Mensajes" panel.
-- `08_pagos_metodos.sql` seeds only the payment-gateway configuration (Stripe/PayPal keys in `configuracion`) — the `metodos_pago` rows themselves are seeded once, in `03_seed_data.sql`, to avoid duplicate rows for the same payment method under two different `clave`s.
+As of the July 2026 consolidation, this is only 4 scripts (down from 7). What used to be separate files got folded into the base scripts:
+- `06_imagenes.sql` (indexes on `producto_imagenes`) → merged into `01_schema.sql`.
+- `07_contacto.sql` (`mensajes_contacto`, `password_resets` tables) → merged into `01_schema.sql`, section 11.
+- `08_pagos_metodos.sql` (Stripe/PayPal keys seed in `configuracion`) → merged into `03_seed_data.sql`.
+
+`05_pagos.sql` adds the PayPal/SPEI payment tables, the parallel Stripe `customer_balance` SPEI flow (dynamic CLABE, selectable via the `spei_motor` config key: `legacy` | `stripe`), and manual payment confirmation (`fn_marcar_pedido_pagado_manual`) — required for `/api/pagos`.
 
 Other SQL files (not part of the setup sequence):
+- `database/tools/04_examples.sql` — reference only, usage examples (`SELECT * FROM fn_...`) — never run this against production.
+- `database/tools/CHECK_firmas.sql` — diagnostic: verifies stored function signatures.
+- `database/migrations/12_remove_mercadopago.sql` — already applied; removes MercadoPago references. Kept for historical reference only.
 - `database/migrations/13_drop_tablas_huerfanas.sql` — already applied; dropped the unused `sesiones`, `recuperacion_password`, `tarjetas_guardadas` tables. Kept for historical reference only.
 - `database/migrations/14_drop_blog_cotizaciones_cupones_newsletter.sql` — already applied; dropped 9 tables and 5 functions (blog/CMS, cotizaciones, cupones, newsletter) plus the `cupon_id` columns on `carritos`/`pedidos` — all schema drift never defined in any versioned script. Kept for historical reference only.
-- `database/tools/CHECK_firmas.sql` — diagnostic: verifies stored function signatures
-- `database/12_remove_mercadopago.sql` — removes MercadoPago references (already applied; kept for historical reference only)
 
 To reset functions without dropping schema:
 
@@ -80,9 +79,10 @@ MBS_COMUNICACIONES/
 ├── iniciar_con_ngrok.bat        — starts ngrok + Node server together
 ├── iniciar_servidor.bat         — starts Node server only
 ├── database/
-│   ├── 00_drop_functions.sql … 08_pagos_metodos.sql, 12_remove_mercadopago.sql
+│   ├── 00_drop_functions.sql    — maintenance utility, not part of install sequence
+│   ├── 01_schema.sql … 05_pagos.sql — the 4-script install sequence
 │   ├── migrations/              — one-off scripts, already applied (run manually if reverting)
-│   └── tools/                   — diagnostic queries (CHECK_firmas.sql)
+│   └── tools/                   — reference/diagnostic only (04_examples.sql, CHECK_firmas.sql)
 ├── docs/
 │   ├── MBS_DB_README.md         — full stored-function reference
 │   ├── MBS_Documentacion_BD_v2.docx

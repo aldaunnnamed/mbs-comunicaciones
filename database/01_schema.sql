@@ -1,6 +1,9 @@
 -- ================================================================
 --  MBS COMUNICACIONES — SCHEMA PostgreSQL 14+
 --  Archivo 01 — Tablas, índices, triggers de updated_at y FTS
+--  Incluye lo que antes eran los archivos 06_imagenes.sql y
+--  07_contacto.sql (fusionados aquí para reducir la cantidad de
+--  scripts de instalación).
 -- ================================================================
 
 
@@ -60,7 +63,7 @@ CREATE INDEX idx_usuarios_tipo  ON usuarios(tipo);
 SELECT fn_crear_trigger_updated_at('usuarios');
 
 -- Nota: no hay tabla de sesiones — la autenticación es JWT stateless.
--- La recuperación de contraseña usa password_resets (ver 07_contacto.sql).
+-- La recuperación de contraseña usa password_resets (ver sección 11, más abajo).
 
 -- ================================================================
 -- 2. CATÁLOGO
@@ -152,6 +155,8 @@ CREATE TABLE IF NOT EXISTS producto_imagenes (
   created_at   TIMESTAMPTZ   NOT NULL DEFAULT NOW()
 );
 CREATE INDEX idx_prod_imagenes_prod ON producto_imagenes(producto_id);
+CREATE INDEX idx_prod_imagenes_principal ON producto_imagenes(producto_id, es_principal)
+  WHERE es_principal = TRUE;
 
 CREATE TABLE IF NOT EXISTS producto_especificaciones (
   id          SERIAL        PRIMARY KEY,
@@ -428,3 +433,28 @@ CREATE TABLE IF NOT EXISTS auditoria (
 CREATE INDEX idx_audit_tabla   ON auditoria(tabla, registro_id);
 CREATE INDEX idx_audit_usuario ON auditoria(usuario_id);
 CREATE INDEX idx_audit_created ON auditoria(created_at);
+
+-- ================================================================
+-- 11. CONTACTO Y RECUPERACIÓN DE CONTRASEÑA
+-- ================================================================
+
+CREATE TABLE IF NOT EXISTS mensajes_contacto (
+  id          SERIAL        PRIMARY KEY,
+  nombre      VARCHAR(120)  NOT NULL,
+  empresa     VARCHAR(120),
+  email       VARCHAR(200)  NOT NULL,
+  telefono    VARCHAR(30),
+  asunto      VARCHAR(60)   NOT NULL,
+  mensaje     TEXT          NOT NULL,
+  leido       BOOLEAN       NOT NULL DEFAULT FALSE,
+  created_at  TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS password_resets (
+  id          SERIAL        PRIMARY KEY,
+  usuario_id  INT           NOT NULL UNIQUE REFERENCES usuarios(id) ON DELETE CASCADE,
+  token       VARCHAR(64)   NOT NULL,
+  expira_at   TIMESTAMPTZ   NOT NULL,
+  usado       BOOLEAN       NOT NULL DEFAULT FALSE,
+  created_at  TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+);

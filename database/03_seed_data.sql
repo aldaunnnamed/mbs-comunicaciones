@@ -25,6 +25,26 @@ INSERT INTO configuracion (clave, valor, tipo, seccion, descripcion) VALUES
 ('seg_2fa_activo',      'true',  'booleano', 'seguridad',      '2FA Google Authenticator')
 ON CONFLICT (clave) DO NOTHING;
 
+-- ── CONFIGURACIÓN DE PASARELAS DE PAGO (Stripe/PayPal) ────────
+-- (antes vivía en 08_pagos_metodos.sql; el seed de metodos_pago en sí
+-- sigue estando solo en la sección de abajo, no se repite aquí)
+INSERT INTO configuracion (clave, valor, tipo, seccion, descripcion) VALUES
+('stripe_mode',                'sandbox', 'texto',   'pagos', 'Modo Stripe: sandbox o live'),
+('stripe_pk_test',             '',        'texto',   'pagos', 'Stripe Publishable Key (test)'),
+('stripe_sk_test',             '',        'texto', 'pagos', 'Stripe Secret Key (test)'),
+('stripe_webhook_secret_test', '',        'texto', 'pagos', 'Stripe Webhook Signing Secret (test)'),
+('stripe_pk_live',             '',        'texto',   'pagos', 'Stripe Publishable Key (live)'),
+('stripe_sk_live',             '',        'texto', 'pagos', 'Stripe Secret Key (live)'),
+('stripe_webhook_secret_live', '',        'texto', 'pagos', 'Stripe Webhook Signing Secret (live)'),
+('paypal_mode',             'sandbox', 'texto',   'pagos', 'Modo PayPal: sandbox o live'),
+('paypal_client_id_test',   '',        'texto',   'pagos', 'PayPal Client ID (sandbox)'),
+('paypal_secret_test',      '',        'texto', 'pagos', 'PayPal Secret (sandbox)'),
+('paypal_webhook_id_test',  '',        'texto',   'pagos', 'PayPal Webhook ID (sandbox)'),
+('paypal_client_id_live',   '',        'texto',   'pagos', 'PayPal Client ID (live)'),
+('paypal_secret_live',      '',        'texto', 'pagos', 'PayPal Secret (live)'),
+('paypal_webhook_id_live',  '',        'texto',   'pagos', 'PayPal Webhook ID (live)')
+ON CONFLICT (clave) DO NOTHING;
+
 -- ── MARCAS ────────────────────────────────────────────────────
 INSERT INTO marcas (nombre, activa) VALUES
 ('Corning',   TRUE), ('CommScope', TRUE), ('Panduit', TRUE),

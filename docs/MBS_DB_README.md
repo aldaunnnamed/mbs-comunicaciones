@@ -5,19 +5,16 @@
 ```
 database/
 ├── 00_drop_functions.sql        → Elimina funciones previas (opcional, antes de 02)
-├── 01_schema.sql                → Tablas, índices, triggers
+├── 01_schema.sql                → Tablas, índices, triggers (incluye lo que antes eran 06_imagenes.sql y 07_contacto.sql)
 ├── 02_functions.sql             → Funciones / stored procedures (incluye carrito y notas de pedido)
-├── 03_seed_data.sql             → Datos iniciales y de prueba, incluye el seed único de metodos_pago
-├── 04_examples.sql               → Guía de uso con SELECTs listos (referencia — algunas funciones citadas ya no existen, ver nota abajo)
+├── 03_seed_data.sql             → Datos iniciales y de prueba, incluye el seed de metodos_pago y la config de pasarelas (antes en 08_pagos_metodos.sql)
 ├── 05_pagos.sql                  → Módulo de pagos: PayPal, SPEI legacy y SPEI vía Stripe (customer_balance)
-├── 06_imagenes.sql               → Índices de producto_imagenes (opcional/referencia)
-├── 07_contacto.sql               → Tablas mensajes_contacto y password_resets
-├── 08_pagos_metodos.sql          → Siembra solo la configuración de pasarelas (Stripe/PayPal); no siembra metodos_pago
-├── 12_remove_mercadopago.sql     → Elimina referencias a MercadoPago (ya aplicado; histórico)
 ├── migrations/
+│   ├── 12_remove_mercadopago.sql → Elimina referencias a MercadoPago (ya aplicado; histórico)
 │   ├── 13_drop_tablas_huerfanas.sql → Elimina sesiones/recuperacion_password/tarjetas_guardadas (ya aplicado; histórico)
 │   └── 14_drop_blog_cotizaciones_cupones_newsletter.sql → Elimina 9 tablas + 5 funciones de drift (blog, cotizaciones, cupones, newsletter) y cupon_id en carritos/pedidos (ya aplicado; histórico)
 └── tools/
+    ├── 04_examples.sql           → Guía de uso con SELECTs listos (referencia — algunas funciones citadas ya no existen, ver nota abajo)
     └── CHECK_firmas.sql          → Diagnóstico: verifica firmas de funciones almacenadas
 docs/
 └── MBS_DB_README.md      → Esta documentación
@@ -33,17 +30,17 @@ docs/
 Los archivos tienen dependencias entre sí. **Deben ejecutarse en este orden:**
 
 ```
-01_schema.sql → 02_functions.sql → 03_seed_data.sql → 05_pagos.sql → 06_imagenes.sql →
-07_contacto.sql → 08_pagos_metodos.sql
+01_schema.sql → 02_functions.sql → 03_seed_data.sql → 05_pagos.sql
 ```
 
+Desde la unificación de julio 2026 esto son solo 4 scripts (antes eran 7): `06_imagenes.sql`, `07_contacto.sql` y `08_pagos_metodos.sql` se fusionaron en los archivos base de arriba, y ya no existen como archivos separados.
+
 - `00_drop_functions.sql` es opcional: solo se usa para reinstalar `02_functions.sql` sin recrear el esquema.
-- `04_examples.sql` es solo de referencia, no se ejecuta en producción.
+- `tools/04_examples.sql` es solo de referencia, no se ejecuta en producción.
 - `05_pagos.sql` agrega las tablas y funciones de PayPal/SPEI, incluido el flujo SPEI vía Stripe (`customer_balance`, CLABE dinámica) en paralelo al flujo SPEI casero, seleccionable con la clave de configuración `spei_motor` (`legacy` | `stripe`) — necesario para que `/api/pagos` funcione.
-- `06_imagenes.sql` es opcional: solo agrega índices sobre `producto_imagenes` (la tabla ya existe en `01_schema.sql`).
-- `07_contacto.sql` crea `mensajes_contacto` (formulario de contacto) y `password_resets` (recuperación de contraseña), usados por el backend.
-- `08_pagos_metodos.sql` siembra solo la configuración de pasarelas (Stripe/PayPal). El seed de `metodos_pago` en sí vive únicamente en `03_seed_data.sql` — no se repite aquí para evitar filas duplicadas del mismo método bajo dos `clave` distintas.
-- `12_remove_mercadopago.sql` ya fue aplicado; se conserva solo como referencia histórica.
+- `01_schema.sql` ya incluye los índices de `producto_imagenes` y las tablas `mensajes_contacto` (formulario de contacto) y `password_resets` (recuperación de contraseña).
+- `03_seed_data.sql` ya incluye la configuración de pasarelas (Stripe/PayPal) además del seed de `metodos_pago`.
+- `migrations/12_remove_mercadopago.sql` ya fue aplicado; se conserva solo como referencia histórica.
 
 ---
 
@@ -150,7 +147,7 @@ SISTEMA
 | `fn_marcar_pedido_pagado_manual(pedido_id, admin_id, nota)` | Marca un pedido como pagado manualmente desde el panel admin (pedidos legacy sin webhook, o cualquier caso fuera de banda); también cierra referencias SPEI pendientes/procesando | `SELECT fn_marcar_pedido_pagado_manual(1,1,'Confirmado por telefono con el cliente.');` |
 | `fn_estado_pago_pedido(pedido_id)` | Resume el estado de pago de un pedido: estatus general + datos de SPEI y PayPal en una sola fila | `SELECT * FROM fn_estado_pago_pedido(1);` |
 
-> `fn_vencer_referencias_spei()` está documentada en `04_examples.sql` pero no existe como función almacenada en el esquema actual — no invocarla.
+> `fn_vencer_referencias_spei()` está documentada en `tools/04_examples.sql` pero no existe como función almacenada en el esquema actual — no invocarla.
 
 ### Módulo: Inventario
 
