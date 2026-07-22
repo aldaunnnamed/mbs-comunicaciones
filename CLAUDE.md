@@ -87,8 +87,10 @@ MBS_COMUNICACIONES/
 │   ├── MBS_DB_README.md         — full stored-function reference
 │   ├── MBS_Documentacion_BD_v2.docx
 │   ├── AUDITORIA_PROYECTO.md
-│   ├── Manual_Usuario_Admin_MBS_v1.0.pdf
-│   ├── Manual_Usuario_MBS_v2.0.pdf
+│   ├── Manual_Usuario_Admin_MBS_v2.0.docx   — current admin manual
+│   ├── Manual_Usuario_Cliente_MBS_v1.0.docx — current client-portal manual
+│   ├── archivo/                 — superseded docs, kept for history (old admin v1.0 Beta + old combined v2.0 manual)
+│   ├── qa/                      — user stories, use cases, test cases (xlsx)
 │   └── interfaces/
 │       ├── admin/               — wireframe PDFs for admin panel
 │       └── cliente/             — wireframe PDFs for storefront
